@@ -1,16 +1,18 @@
-/* Full-page centered gradient background */
+/* Full-page centered background */
 .app-root {
   min-height: 100vh;
   margin: 0;
   padding: 0;
 
   display: flex;
-  justify-content: center;
+  flex-direction: column; /* so toggle can be at top */
   align-items: center;
 
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
-  background: linear-gradient(135deg, #4f46e5, #ec4899);
+  /* Use dynamic background colors */
+  background: var(--bg);
+  color: var(--text-main);
 }
 
 /* Centers card and controls width */
@@ -20,11 +22,12 @@
   padding: 20px;
 }
 
-/* White authentication card */
+/* Authentication Card */
 .auth-card {
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 16px;
   padding: 32px 28px;
+  border: 1px solid var(--border-subtle);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
 }
 
@@ -34,7 +37,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: #6366f1;
+  color: var(--accent);
 }
 
 /* Title */
@@ -42,7 +45,7 @@
   font-size: 1.8rem;
   font-weight: 700;
   margin: 0;
-  color: #0f172a;
+  color: var(--text-main);
 }
 
 /* Subtitle */
@@ -50,7 +53,7 @@
   margin-top: 6px;
   margin-bottom: 18px;
   font-size: 0.9rem;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 /* Form styling */
@@ -70,31 +73,35 @@
 .form-field label {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #4b5563;
+  color: var(--text-muted);
 }
 
 .form-field input {
   border-radius: 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-subtle);
   padding: 10px 12px;
   font-size: 0.9rem;
+  background: var(--input-bg);
+  color: var(--text-main);
 }
 
 .form-field input:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-hover);
   outline: none;
 }
 
 /* MFA input */
 .mfa-input {
   border-radius: 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-subtle);
   padding: 12px;
   width: 100%;
   font-size: 1.2rem;
   text-align: center;
   letter-spacing: 4px;
+  background: var(--input-bg);
+  color: var(--text-main);
 }
 
 /* Main button */
@@ -104,15 +111,15 @@
   width: 100%;
   border: none;
   border-radius: 999px;
-  background: #111827;
-  color: #ffffff;
+  background: var(--accent);
+  color: white;
   font-weight: 600;
   font-size: 0.95rem;
   cursor: pointer;
 }
 
 .primary-btn:hover {
-  background: #000000;
+  background: var(--accent-hover);
 }
 
 /* Error message box */
@@ -131,7 +138,30 @@
 .helper-text {
   text-align: center;
   margin-top: 6px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 0.75rem;
 }
 
+/* Theme toggle container */
+.theme-toggle-container {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  padding: 1rem 1.5rem;
+}
+
+.theme-toggle {
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--text-main);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.theme-toggle:hover {
+  background: var(--accent-hover);
+  color: white;
+  border-color: var(--accent);
+}
