@@ -9,16 +9,19 @@ type Theme = "light" | "dark";
 function App() {
   const [screen, setScreen] = useState<Screen>("login");
 
-
   const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem("theme");
-    if (stored === "light" || stored === "dark") return stored;
+    if (typeof window === "undefined") return "light";
 
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+    const saved = localStorage.getItem("theme");
+    if (saved === "light" || saved === "dark") {
+      return saved;
+    }
+
+    const prefersDark = window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    return prefersDark ? "dark" : "light";
   });
-
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -26,7 +29,7 @@ function App() {
   }, [theme]);
 
   const toggleTheme = () => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+    setTheme(theme === "light" ? "dark" : "light");
   };
 
   const handlePasswordOk = () => {
@@ -37,16 +40,16 @@ function App() {
     setScreen("dashboard");
   };
 
+  const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
+
   return (
     <div className="app-root">
-      {}
       <div className="theme-toggle-container">
         <button className="theme-toggle" onClick={toggleTheme}>
-          {theme === "light" ? "🌙 Dark Mode" : "☀️ Light Mode"}
+          {themeLabel}
         </button>
       </div>
 
-      {}
       <div className="center-content">
         {screen === "login" && <Login onPasswordOk={handlePasswordOk} />}
 
