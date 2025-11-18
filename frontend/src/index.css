@@ -1,5 +1,5 @@
 :root {
-  /* default = light theme */
+
   color-scheme: light;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
@@ -13,7 +13,7 @@
   --input-bg: #ffffff;
 }
 
-/* dark theme overrides */
+
 :root[data-theme="dark"] {
   color-scheme: dark;
 
@@ -27,7 +27,7 @@
   --input-bg: #020617;
 }
 
-/* reset box model */
+
 *,
 *::before,
 *::after {
