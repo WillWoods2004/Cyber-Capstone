@@ -9,10 +9,8 @@ type Theme = "light" | "dark";
 function App() {
   const [screen, setScreen] = useState<Screen>("login");
 
-  // Load the user's theme (or use system preference)
+  // Theme state with localStorage + system preference fallback
   const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "light";
-
     const stored = localStorage.getItem("theme");
     if (stored === "light" || stored === "dark") return stored;
 
@@ -21,7 +19,7 @@ function App() {
       : "light";
   });
 
-  // Apply theme to <html> whenever it changes
+  // Apply theme to <html data-theme="...">
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("theme", theme);
@@ -48,24 +46,27 @@ function App() {
         </button>
       </div>
 
-      {screen === "login" && <Login onPasswordOk={handlePasswordOk} />}
+      {/* Centered main content */}
+      <div className="center-content">
+        {screen === "login" && <Login onPasswordOk={handlePasswordOk} />}
 
-      {screen === "mfa" && (
-        <div className="card-wrapper">
-          <MFAVerify onMfaOk={handleMfaOk} />
-        </div>
-      )}
-
-      {screen === "dashboard" && (
-        <div className="card-wrapper">
-          <div className="auth-card">
-            <h1 className="auth-title">Welcome!</h1>
-            <p className="auth-subtitle">
-              You have successfully logged in with MFA.
-            </p>
+        {screen === "mfa" && (
+          <div className="card-wrapper">
+            <MFAVerify onMfaOk={handleMfaOk} />
           </div>
-        </div>
-      )}
+        )}
+
+        {screen === "dashboard" && (
+          <div className="card-wrapper">
+            <div className="auth-card">
+              <h1 className="auth-title">Welcome!</h1>
+              <p className="auth-subtitle">
+                You have successfully logged in with MFA.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
