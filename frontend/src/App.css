@@ -1,18 +1,22 @@
-/* Full-page centered background */
+/* Root layout: header + centered content */
 .app-root {
   min-height: 100vh;
-  margin: 0;
-  padding: 0;
-
+  width: 100%;
   display: flex;
-  flex-direction: column; /* so toggle can be at top */
-  align-items: center;
-
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-
-  /* Use dynamic background colors */
+  flex-direction: column; /* header on top, content below */
   background: var(--bg);
   color: var(--text-main);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+/* Main area that centers the card */
+.center-content {
+  flex: 1; /* take up remaining height under the header */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1.5rem;
 }
 
 /* Centers card and controls width */
@@ -22,7 +26,7 @@
   padding: 20px;
 }
 
-/* Authentication Card */
+/* Authentication card */
 .auth-card {
   background: var(--bg-card);
   border-radius: 16px;
@@ -131,7 +135,7 @@
   font-size: 0.85rem;
   font-weight: 600;
   margin-bottom: 12px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
 
 /* Demo helper text */
@@ -142,7 +146,7 @@
   font-size: 0.75rem;
 }
 
-/* Theme toggle container */
+/* Theme toggle (top-right) */
 .theme-toggle-container {
   width: 100%;
   display: flex;
