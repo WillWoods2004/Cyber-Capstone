@@ -9,7 +9,7 @@ type Theme = "light" | "dark";
 function App() {
   const [screen, setScreen] = useState<Screen>("login");
 
-  // Theme state with localStorage + system preference fallback
+
   const [theme, setTheme] = useState<Theme>(() => {
     const stored = localStorage.getItem("theme");
     if (stored === "light" || stored === "dark") return stored;
@@ -19,7 +19,7 @@ function App() {
       : "light";
   });
 
-  // Apply theme to <html data-theme="...">
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("theme", theme);
@@ -39,14 +39,14 @@ function App() {
 
   return (
     <div className="app-root">
-      {/* Top-right theme toggle */}
+      {}
       <div className="theme-toggle-container">
         <button className="theme-toggle" onClick={toggleTheme}>
           {theme === "light" ? "🌙 Dark Mode" : "☀️ Light Mode"}
         </button>
       </div>
 
-      {/* Centered main content */}
+      {}
       <div className="center-content">
         {screen === "login" && <Login onPasswordOk={handlePasswordOk} />}
 
