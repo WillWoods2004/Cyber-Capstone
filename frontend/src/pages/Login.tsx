@@ -54,10 +54,13 @@ export default function Login({ onPasswordOk }: Props) {
         return;
       }
 
-      // Expected Lambda → API Gateway response like:
-      // { success: boolean, mfaEnabled: boolean, message?: string }
+      // Expected response: { success: boolean, mfaEnabled?: boolean, ... }
       if (data.success) {
-        const mfaFromApi = Boolean(data.mfaEnabled);
+        // 🔑 KEY CHANGE:
+        // If backend does not send mfaEnabled, we default to true
+        // so EVERY successful login goes to MFA.
+        const mfaFromApi =
+          data.mfaEnabled !== undefined ? Boolean(data.mfaEnabled) : true;
 
         // Notify App that login is OK and pass MFA flag + username
         onPasswordOk(mfaFromApi, username);
