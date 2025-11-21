@@ -1,44 +1,54 @@
 import { useState } from "react";
 import { ErrorBox } from "../components/Error";
 
-const MAX_ATTEMPTS = 3;
-
 interface Props {
-  onPasswordOk: () => void;
+  onPasswordOk: (mfaEnabled: boolean) => void;
 }
 
 export default function Login({ onPasswordOk }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [attempts, setAttempts] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
 
-    if (attempts >= MAX_ATTEMPTS) {
-      setError("Password attempt limit reached.");
-      return;
-    }
+    try {
+      const response = await fetch(
+        "https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod/login",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        }
+      );
 
-    if (username === "testuser" && password === "Test123!") {
-      onPasswordOk();
-    } else {
-      const newAttempts = attempts + 1;
-      setAttempts(newAttempts);
+      const data = await response.json();
+      console.log("Login API result:", data);
 
-      if (newAttempts >= MAX_ATTEMPTS) {
-        setError("Password attempt limit reached.");
-      } else {
-        setError("Wrong username or password.");
+      if (!response.ok || data.success === false) {
+        setError(data.message || "Invalid username or password.");
+        setLoading(false);
+        return;
       }
+
+      // SUCCESS → Send MFA state to parent
+      onPasswordOk(data.mfaEnabled);
+      
+    } catch (err) {
+      console.error(err);
+      setError("Network error. Try again.");
     }
+
+    setLoading(false);
   };
 
   return (
     <div className="card-wrapper">
       <div className="auth-card">
-
         <h2 className="auth-overline">SecurityPass</h2>
         <h1 className="auth-title">Sign in</h1>
         <p className="auth-subtitle">
@@ -55,6 +65,7 @@ export default function Login({ onPasswordOk }: Props) {
               placeholder="your.email@example.com"
               value={username}
               onChange={e => setUsername(e.target.value)}
+              disabled={loading}
             />
           </div>
 
@@ -65,15 +76,16 @@ export default function Login({ onPasswordOk }: Props) {
               placeholder="••••••••"
               value={password}
               onChange={e => setPassword(e.target.value)}
+              disabled={loading}
             />
           </div>
 
           <button
             type="submit"
-            disabled={attempts >= MAX_ATTEMPTS}
             className="primary-btn"
+            disabled={loading}
           >
-            Log in
+            {loading ? "Logging in..." : "Log in"}
           </button>
 
           <p className="helper-text">
@@ -84,4 +96,3 @@ export default function Login({ onPasswordOk }: Props) {
     </div>
   );
 }
-
