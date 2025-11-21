@@ -17,12 +17,8 @@ function App() {
     setCurrentUser(username);
     setMfaEnabled(mfaFromApi);
 
-    if (mfaFromApi) {
-      setScreen("mfa");
-    } else {
-      // No MFA → go straight to dashboard
-      setScreen("dashboard");
-    }
+    // Always go to MFA, but pass whether user is already enrolled
+    setScreen("mfa");
   };
 
   const handleMfaOk = () => {
@@ -35,7 +31,6 @@ function App() {
   };
 
   const handleRegistered = (username: string) => {
-    // After successful registration, go back to login and prefill username
     setLastRegisteredUsername(username);
     setScreen("login");
   };
@@ -62,7 +57,11 @@ function App() {
       )}
 
       {screen === "mfa" && (
-        <MFAVerify username={currentUser} onMfaOk={handleMfaOk} />
+        <MFAVerify
+          username={currentUser}
+          enrolled={mfaEnabled}
+          onMfaOk={handleMfaOk}
+        />
       )}
 
       {screen === "dashboard" && (
