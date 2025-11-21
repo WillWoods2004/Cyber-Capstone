@@ -1,48 +1,75 @@
 import { useState } from "react";
 import { ErrorBox } from "../components/Error";
 
+const MAX_ATTEMPTS = 3;
+
+// Your deployed API base URL (with /prod)
+const API_BASE = "https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod";
+
 interface Props {
-  onPasswordOk: (mfaEnabled: boolean, username: string) => void;
+  onPasswordOk: () => void;
 }
 
 export default function Login({ onPasswordOk }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [attempts, setAttempts] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // lockout
+    if (attempts >= MAX_ATTEMPTS) {
+      setError("Password attempt limit reached.");
+      return;
+    }
+
     setError("");
     setLoading(true);
 
     try {
-      const response = await fetch(
-        "https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password }),
-        }
-      );
+      const res = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      });
 
-      const data = await response.json();
-      console.log("Login API result:", data);
-
-      if (!response.ok || data.success === false) {
-        setError(data.message || "Invalid username or password.");
-        setLoading(false);
+      // This catches HTTP errors (500, 403, etc.)
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error("Login HTTP error:", res.status, text);
+        setError("Network error. Try again.");
         return;
       }
 
-      // SUCCESS → tell App if MFA is enabled, and which user logged in
-      onPasswordOk(data.mfaEnabled, username);
-    } catch (err) {
-      console.error(err);
-      setError("Network error. Try again.");
-    }
+      const data = await res.json();
+      console.log("Login response:", data);
 
-    setLoading(false);
+      // Expecting: { success: boolean, mfaEnabled: boolean, message: string }
+      if (!data.success) {
+        const newAttempts = attempts + 1;
+        setAttempts(newAttempts);
+
+        if (newAttempts >= MAX_ATTEMPTS) {
+          setError("Password attempt limit reached.");
+        } else {
+          setError("Wrong username or password.");
+        }
+        return;
+      }
+
+      // Password is correct
+      onPasswordOk();
+    } catch (err) {
+      console.error("Login fetch failed:", err);
+      setError("Network error. Try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -64,7 +91,6 @@ export default function Login({ onPasswordOk }: Props) {
               placeholder="your.email@example.com"
               value={username}
               onChange={e => setUsername(e.target.value)}
-              disabled={loading}
             />
           </div>
 
@@ -75,16 +101,15 @@ export default function Login({ onPasswordOk }: Props) {
               placeholder="••••••••"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              disabled={loading}
             />
           </div>
 
           <button
             type="submit"
+            disabled={attempts >= MAX_ATTEMPTS || loading}
             className="primary-btn"
-            disabled={loading}
           >
-            {loading ? "Logging in..." : "Log in"}
+            {loading ? "Signing in..." : "Log in"}
           </button>
 
           <p className="helper-text">
