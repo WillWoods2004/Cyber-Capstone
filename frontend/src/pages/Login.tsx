@@ -58,6 +58,7 @@ export default function Login({
       }
 
       if (data.success) {
+        // Use backend-provided MFA status
         const mfaFromApi = Boolean(data.mfaEnabled);
         onPasswordOk(mfaFromApi, username);
       } else {
