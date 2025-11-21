@@ -8,7 +8,6 @@ const API_BASE =
   "https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod";
 
 interface Props {
-  // App.tsx expects: (mfaFromApi, username)
   onPasswordOk: (mfaFromApi: boolean, username: string) => void;
   onShowRegister: () => void;
   initialUsername?: string;
@@ -48,7 +47,6 @@ export default function Login({
       const data: any = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        // Use the backend message directly (USERNAME_NOT_FOUND or INVALID_PASSWORD)
         const serverMessage =
           (data && (data.message || data.error)) ?? undefined;
 
@@ -59,10 +57,8 @@ export default function Login({
         return;
       }
 
-      // Backend just needs to say success true/false.
       if (data.success) {
-        // For this project we always go to MFA after a successful password.
-        const mfaFromApi = true;
+        const mfaFromApi = Boolean(data.mfaEnabled);
         onPasswordOk(mfaFromApi, username);
       } else {
         const nextAttempts = attempts + 1;
