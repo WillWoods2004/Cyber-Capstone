@@ -127,3 +127,10 @@
 .pwgen-placeholder {
   color: var(--text-muted);
 }
+
+/* --- Caps Lock warning (our new feature) --- */
+.caps-warning {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: #fbbf24; /* yellow warning */
+}
