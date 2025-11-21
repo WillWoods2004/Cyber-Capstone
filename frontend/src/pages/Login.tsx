@@ -38,20 +38,44 @@ export default function Login({ onPasswordOk }: Props) {
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await response.json().catch(() => ({}));
+      // Try to parse JSON; fall back to empty object if it fails
+      const data: any = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         // Server reachable, but returned 4xx/5xx
+        const serverMessage =
+          (data && (data.message || data.error)) ?? undefined;
+
         setError(
-          (data && data.message) ||
+          serverMessage ||
             `Server error (${response.status}). Please try again.`
         );
         return;
       }
 
-      // Expecting Lambda → API Gateway response like:
-      // { success: true/false, mfaEnabled: boolean, message: string }
+      // Expected Lambda → API Gateway response like:
+      // { success: boolean, message?: string, token?: string, user?: { email?: string, username?: string } }
       if (data.success) {
+        // Persist auth data so the rest of the app can read it
+        if (data.token) {
+          localStorage.setItem("authToken", data.token);
+        }
+
+        if (data.user) {
+          try {
+            localStorage.setItem("authUser", JSON.stringify(data.user));
+          } catch {
+            // Ignore storage errors
+          }
+        } else {
+          // If backend doesn't send a user object, at least save the username used to log in
+          localStorage.setItem(
+            "authUser",
+            JSON.stringify({ username: username || data.username, email: data.email })
+          );
+        }
+
+        // Notify parent that password was correct so it can move to the next screen
         onPasswordOk();
       } else {
         const nextAttempts = attempts + 1;
