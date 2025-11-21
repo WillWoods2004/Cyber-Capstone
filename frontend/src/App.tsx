@@ -1,3 +1,5 @@
+// Front-End/frontend/src/App.tsx
+
 import { useState } from "react";
 import "./App.css";
 import Login from "./pages/Login";
@@ -23,6 +25,7 @@ function App() {
   };
 
   const handleMfaOk = () => {
+    setMfaEnabled(true);
     setScreen("dashboard");
   };
 
@@ -39,9 +42,12 @@ function App() {
           <div className="auth-card">
             <h1 className="auth-title">Welcome!</h1>
             <p className="auth-subtitle">
-              You have successfully logged in{mfaEnabled ? " with MFA" : ""}.
+              You have successfully logged in
+              {mfaEnabled ? " with MFA." : "."}
             </p>
-            <p className="helper-text">Logged in as <strong>{currentUser}</strong></p>
+            <p className="helper-text">
+              Logged in as <strong>{currentUser}</strong>
+            </p>
           </div>
         </div>
       )}
