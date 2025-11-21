@@ -13,11 +13,12 @@ function App() {
   const [lastRegisteredUsername, setLastRegisteredUsername] =
     useState<string>("");
 
+  // Called by Login.tsx when password is correct
   const handlePasswordOk = (mfaFromApi: boolean, username: string) => {
     setCurrentUser(username);
     setMfaEnabled(mfaFromApi);
 
-    // Always go to MFA, but pass whether user is already enrolled
+    // Always go to MFA; MFAVerify will show either setup or verify
     setScreen("mfa");
   };
 
