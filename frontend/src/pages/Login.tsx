@@ -1,10 +1,11 @@
+// Front-End/frontend/src/pages/Login.tsx
+
 import { useState } from "react";
 import { ErrorBox } from "../components/Error";
 
 const MAX_ATTEMPTS = 3;
-
-// Your deployed API base URL (with /prod)
-const API_BASE = "https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod";
+const API_BASE =
+  "https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod";
 
 interface Props {
   onPasswordOk: () => void;
@@ -19,18 +20,17 @@ export default function Login({ onPasswordOk }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
 
-    // lockout
     if (attempts >= MAX_ATTEMPTS) {
       setError("Password attempt limit reached.");
       return;
     }
 
-    setError("");
-    setLoading(true);
-
     try {
-      const res = await fetch(`${API_BASE}/login`, {
+      setLoading(true);
+
+      const response = await fetch(`${API_BASE}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -38,34 +38,36 @@ export default function Login({ onPasswordOk }: Props) {
         body: JSON.stringify({ username, password }),
       });
 
-      // This catches HTTP errors (500, 403, etc.)
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        console.error("Login HTTP error:", res.status, text);
-        setError("Network error. Try again.");
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        // Server reachable, but returned 4xx/5xx
+        setError(
+          (data && data.message) ||
+            `Server error (${response.status}). Please try again.`
+        );
         return;
       }
 
-      const data = await res.json();
-      console.log("Login response:", data);
+      // Expecting Lambda → API Gateway response like:
+      // { success: true/false, mfaEnabled: boolean, message: string }
+      if (data.success) {
+        onPasswordOk();
+      } else {
+        const nextAttempts = attempts + 1;
+        setAttempts(nextAttempts);
 
-      // Expecting: { success: boolean, mfaEnabled: boolean, message: string }
-      if (!data.success) {
-        const newAttempts = attempts + 1;
-        setAttempts(newAttempts);
-
-        if (newAttempts >= MAX_ATTEMPTS) {
+        if (nextAttempts >= MAX_ATTEMPTS) {
           setError("Password attempt limit reached.");
         } else {
-          setError("Wrong username or password.");
+          setError(
+            data.message || "Wrong username or password. Please try again."
+          );
         }
-        return;
       }
-
-      // Password is correct
-      onPasswordOk();
     } catch (err) {
-      console.error("Login fetch failed:", err);
+      console.error("Login network error:", err);
+      // Only show this when fetch actually throws (CORS, offline, DNS, etc.)
       setError("Network error. Try again.");
     } finally {
       setLoading(false);
@@ -90,7 +92,8 @@ export default function Login({ onPasswordOk }: Props) {
               type="text"
               placeholder="your.email@example.com"
               value={username}
-              onChange={e => setUsername(e.target.value)}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
             />
           </div>
 
@@ -100,7 +103,8 @@ export default function Login({ onPasswordOk }: Props) {
               type="password"
               placeholder="••••••••"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
             />
           </div>
 
@@ -109,7 +113,7 @@ export default function Login({ onPasswordOk }: Props) {
             disabled={attempts >= MAX_ATTEMPTS || loading}
             className="primary-btn"
           >
-            {loading ? "Signing in..." : "Log in"}
+            {loading ? "Logging in..." : "Log in"}
           </button>
 
           <p className="helper-text">
