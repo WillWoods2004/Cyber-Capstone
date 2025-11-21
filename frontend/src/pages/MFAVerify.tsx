@@ -8,7 +8,7 @@ const API_BASE =
 
 interface Props {
   username: string;
-  enrolled: boolean; // from backend login
+  enrolled: boolean; // from backend login (mfaEnabled)
   onMfaOk: () => void;
 }
 
@@ -27,6 +27,7 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
   useEffect(() => {
     const startSetup = async () => {
       if (mode !== "setup") return;
+
       setError("");
       setLoading(true);
 
@@ -49,14 +50,16 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
           return;
         }
 
-        const otpAuthUrl = data.otpAuthUrl || data.otpauthUrl;
-        const secretBase32 = data.secret;
+        const otpAuthUrl: string =
+          data.otpAuthUrl || data.otpauthUrl || "";
 
-        setSecret(secretBase32 || "");
+        const secretBase32: string = data.secret || "";
+        setSecret(secretBase32);
 
         if (otpAuthUrl) {
+          // Use a simple public QR service for dev
           const url =
-            "https://chart.googleapis.com/chart?cht=qr&chs=220x220&chl=" +
+            "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" +
             encodeURIComponent(otpAuthUrl);
           setQrUrl(url);
         }
@@ -149,7 +152,11 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
                 )}
               </>
             ) : (
-              <p className="helper-text">Preparing your MFA setup…</p>
+              <p className="helper-text">
+                {loading
+                  ? "Preparing your MFA setup…"
+                  : "Unable to load QR code. You can still use the manual key below."}
+              </p>
             )}
           </div>
         )}
@@ -172,11 +179,7 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
             disabled={loading}
             className="primary-btn"
           >
-            {loading
-              ? isSetup
-                ? "Verifying..."
-                : "Verifying..."
-              : "Verify"}
+            {loading ? "Verifying..." : "Verify"}
           </button>
         </form>
       </div>
