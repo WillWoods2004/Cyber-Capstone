@@ -8,7 +8,8 @@ const API_BASE =
   "https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod";
 
 interface Props {
-  onPasswordOk: () => void;
+  // App.tsx expects: (mfaFromApi, username)
+  onPasswordOk: (mfaFromApi: boolean, username: string) => void;
 }
 
 export default function Login({ onPasswordOk }: Props) {
@@ -54,29 +55,12 @@ export default function Login({ onPasswordOk }: Props) {
       }
 
       // Expected Lambda → API Gateway response like:
-      // { success: boolean, message?: string, token?: string, user?: { email?: string, username?: string } }
+      // { success: boolean, mfaEnabled: boolean, message?: string }
       if (data.success) {
-        // Persist auth data so the rest of the app can read it
-        if (data.token) {
-          localStorage.setItem("authToken", data.token);
-        }
+        const mfaFromApi = Boolean(data.mfaEnabled);
 
-        if (data.user) {
-          try {
-            localStorage.setItem("authUser", JSON.stringify(data.user));
-          } catch {
-            // Ignore storage errors
-          }
-        } else {
-          // If backend doesn't send a user object, at least save the username used to log in
-          localStorage.setItem(
-            "authUser",
-            JSON.stringify({ username: username || data.username, email: data.email })
-          );
-        }
-
-        // Notify parent that password was correct so it can move to the next screen
-        onPasswordOk();
+        // Notify App that login is OK and pass MFA flag + username
+        onPasswordOk(mfaFromApi, username);
       } else {
         const nextAttempts = attempts + 1;
         setAttempts(nextAttempts);
