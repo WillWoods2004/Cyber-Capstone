@@ -13,7 +13,6 @@
   --input-bg: #ffffff;
 }
 
-
 :root[data-theme="dark"] {
   color-scheme: dark;
 
@@ -26,7 +25,6 @@
   --accent-hover: #3b82f6;
   --input-bg: #020617;
 }
-
 
 *,
 *::before,
