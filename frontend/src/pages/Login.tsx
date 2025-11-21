@@ -24,6 +24,18 @@ export default function Login({
   const [attempts, setAttempts] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  // our added state for Caps Lock warning
+  const [capsOn, setCapsOn] = useState(false);
+
+  // our handler to detect Caps Lock on the password field
+  const handlePasswordKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    const isCaps =
+      e.getModifierState && e.getModifierState("CapsLock");
+    setCapsOn(isCaps);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -112,7 +124,14 @@ export default function Login({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
+              // our caps lock detector
+              onKeyDown={handlePasswordKeyDown}
             />
+            {capsOn && (
+              <p className="caps-warning">
+                ⚠ Caps Lock is ON. Your password may be entered incorrectly.
+              </p>
+            )}
           </div>
 
           <button
