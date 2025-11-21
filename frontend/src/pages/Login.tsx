@@ -54,13 +54,12 @@ export default function Login({ onPasswordOk }: Props) {
         return;
       }
 
-      // Expected response: { success: boolean, mfaEnabled?: boolean, ... }
+      // Expected response: { success: boolean, ... }
       if (data.success) {
-        // 🔑 KEY CHANGE:
-        // If backend does not send mfaEnabled, we default to true
-        // so EVERY successful login goes to MFA.
-        const mfaFromApi =
-          data.mfaEnabled !== undefined ? Boolean(data.mfaEnabled) : true;
+        // 🔑 FORCE MFA:
+        // We ignore any mfaEnabled flag from the backend.
+        // Every successful login proceeds to MFA.
+        const mfaFromApi = true;
 
         // Notify App that login is OK and pass MFA flag + username
         onPasswordOk(mfaFromApi, username);
