@@ -10,10 +10,16 @@ const API_BASE =
 interface Props {
   // App.tsx expects: (mfaFromApi, username)
   onPasswordOk: (mfaFromApi: boolean, username: string) => void;
+  onShowRegister: () => void;
+  initialUsername?: string;
 }
 
-export default function Login({ onPasswordOk }: Props) {
-  const [username, setUsername] = useState("");
+export default function Login({
+  onPasswordOk,
+  onShowRegister,
+  initialUsername = "",
+}: Props) {
+  const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [attempts, setAttempts] = useState(0);
@@ -119,8 +125,23 @@ export default function Login({ onPasswordOk }: Props) {
             {loading ? "Logging in..." : "Log in"}
           </button>
 
-          <p className="helper-text">
-            Demo login: <strong>testuser</strong> / <strong>Test123!</strong>
+          <p className="helper-text" style={{ marginTop: "1rem" }}>
+            Don&apos;t have an account?{" "}
+            <button
+              type="button"
+              onClick={onShowRegister}
+              className="link-button"
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                color: "#3b82f6",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Create one
+            </button>
           </p>
         </form>
       </div>
