@@ -48,6 +48,7 @@ export default function Login({
       const data: any = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        // Use the backend message directly (USERNAME_NOT_FOUND or INVALID_PASSWORD)
         const serverMessage =
           (data && (data.message || data.error)) ?? undefined;
 
