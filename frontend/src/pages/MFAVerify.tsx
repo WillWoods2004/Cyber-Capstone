@@ -28,7 +28,7 @@ export default function MFAVerify({ username, onMfaOk }: Props) {
     try {
       setLoading(true);
 
-      const response = await fetch(`${API_BASE}/mfa-verify`, {
+      const response = await fetch(`${API_BASE}/mfa/verify`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -58,7 +58,7 @@ export default function MFAVerify({ username, onMfaOk }: Props) {
   return (
     <div className="card-wrapper">
       <div className="auth-card">
-        <h2 className="auth-overline">SecurityPass</h2>
+        <h2 className="auth-overline">SECURITYPASS</h2>
         <h1 className="auth-title">Enter MFA Code</h1>
         <p className="auth-subtitle">Check your Authenticator app.</p>
 
