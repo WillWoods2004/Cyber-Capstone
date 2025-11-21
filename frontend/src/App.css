@@ -1,164 +1,129 @@
-.app-root {
-  min-height: 100vh;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  color: var(--text-main);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
+/* --- Our dashboard + password generator styles (added) --- */
 
-/* This may still be used elsewhere; leaving it as-is */
-.center-content {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 1.5rem;
-}
-
-/* Make this fill the viewport and center the card */
-.card-wrapper {
-  min-height: 100vh;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 1.5rem;
-}
-
-/* The actual card gets the fixed width */
-.auth-card {
-  background: var(--bg-card);
-  border-radius: 16px;
-  padding: 32px 28px;
-  border: 1px solid var(--border-subtle);
-  box-shadow: 0 18px 40px rgba(0,0,0,0.25);
-
-  width: 100%;
-  max-width: 420px;
-}
-
-.auth-overline {
-  font-size: .75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .12em;
-  color: var(--accent);
-}
-
-.auth-title {
-  font-size: 1.8rem;
-  font-weight: 700;
-  margin: 0;
-  color: var(--text-main);
-}
-
-.auth-subtitle {
-  margin: 6px 0 18px;
-  font-size: .9rem;
-  color: var(--text-muted);
-}
-
-.auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-field label {
-  font-size: .8rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.form-field input {
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle);
-  padding: 10px 12px;
-  font-size: .9rem;
-  background: var(--input-bg);
-  color: var(--text-main);
-}
-
-.form-field input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-hover);
-  outline: none;
-}
-
-.mfa-input {
-  width: 100%;
-  padding: 12px;
-  font-size: 1.2rem;
+/* Only used on the dashboard card */
+.auth-card-dashboard {
   text-align: center;
-  letter-spacing: 4px;
+}
+
+/* Give a little extra space under the subtitle on the dashboard */
+.auth-card-dashboard .auth-subtitle {
+  margin-bottom: 24px;
+}
+
+/* Password generator container */
+.pwgen {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: left;
+}
+
+.pwgen-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.pwgen-subtitle {
+  margin: 0 0 16px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.pwgen-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.pwgen-field span {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.pwgen-field input[type="number"] {
+  width: 120px;
   border-radius: 8px;
   border: 1px solid var(--border-subtle);
+  padding: 8px 10px;
   background: var(--input-bg);
   color: var(--text-main);
 }
 
-.primary-btn {
-  margin-top: 10px;
-  padding: 10px 0;
-  width: 100%;
-  border: none;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 600;
-  font-size: .95rem;
-  cursor: pointer;
+.pwgen-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
 }
 
-.primary-btn:hover {
-  background: var(--accent-hover);
+.pwgen-checkbox input {
+  accent-color: var(--accent);
 }
 
-.error-box {
-  background: #ef4444;
-  color: #fff;
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: .85rem;
-  font-weight: 600;
+.pwgen-error {
+  margin: 6px 0 10px;
+  font-size: 0.8rem;
+  color: #fecaca;
+  background: #7f1d1d;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.pwgen-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
   margin-bottom: 12px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  flex-wrap: wrap;
 }
 
-.helper-text {
-  text-align: center;
-  margin-top: 6px;
-  color: var(--text-muted);
-  font-size: .75rem;
-}
-
-.theme-toggle-container {
-  width: 100%;
-  display: flex;
-  justify-content: flex-end;
-  padding: 1rem 1.5rem;
-}
-
-.theme-toggle {
-  padding: .45rem 1rem;
+.pwgen-copy {
+  padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
   color: var(--text-main);
+  font-size: 0.85rem;
   cursor: pointer;
-  font-size: .9rem;
 }
 
-.theme-toggle:hover {
-  background: var(--accent-hover);
-  color: #fff;
-  border-color: var(--accent);
+.pwgen-copy:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pwgen-output {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pwgen-output-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.pwgen-output-box {
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  padding: 8px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  word-break: break-all;
+}
+
+.pwgen-placeholder {
+  color: var(--text-muted);
 }
