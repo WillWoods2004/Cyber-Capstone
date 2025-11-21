@@ -39,11 +39,9 @@ export default function Login({ onPasswordOk }: Props) {
         body: JSON.stringify({ username, password }),
       });
 
-      // Try to parse JSON; fall back to empty object if it fails
       const data: any = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        // Server reachable, but returned 4xx/5xx
         const serverMessage =
           (data && (data.message || data.error)) ?? undefined;
 
@@ -54,14 +52,10 @@ export default function Login({ onPasswordOk }: Props) {
         return;
       }
 
-      // Expected response: { success: boolean, ... }
+      // Backend just needs to say success true/false.
       if (data.success) {
-        // 🔑 FORCE MFA:
-        // We ignore any mfaEnabled flag from the backend.
-        // Every successful login proceeds to MFA.
+        // For this project we always go to MFA after a successful password.
         const mfaFromApi = true;
-
-        // Notify App that login is OK and pass MFA flag + username
         onPasswordOk(mfaFromApi, username);
       } else {
         const nextAttempts = attempts + 1;
@@ -77,7 +71,6 @@ export default function Login({ onPasswordOk }: Props) {
       }
     } catch (err) {
       console.error("Login network error:", err);
-      // Only show this when fetch actually throws (CORS, offline, DNS, etc.)
       setError("Network error. Try again.");
     } finally {
       setLoading(false);
