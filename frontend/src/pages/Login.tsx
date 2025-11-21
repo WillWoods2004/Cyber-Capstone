@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ErrorBox } from "../components/Error";
 
 interface Props {
-  onPasswordOk: (mfaEnabled: boolean) => void;
+  onPasswordOk: (mfaEnabled: boolean, username: string) => void;
 }
 
 export default function Login({ onPasswordOk }: Props) {
@@ -35,9 +35,8 @@ export default function Login({ onPasswordOk }: Props) {
         return;
       }
 
-      // SUCCESS → Send MFA state to parent
-      onPasswordOk(data.mfaEnabled);
-      
+      // SUCCESS → tell App if MFA is enabled, and which user logged in
+      onPasswordOk(data.mfaEnabled, username);
     } catch (err) {
       console.error(err);
       setError("Network error. Try again.");
