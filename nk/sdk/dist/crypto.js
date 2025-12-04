@@ -1,26 +1,43 @@
-// Paste your working crypto.ts here (Argon2id + AES-GCM using libsodium-wrappers-sumo)
 // nk/sdk/src/crypto.ts
 /**
- * Zero-knowledge client crypto: Argon2id (libsodium crypto_pwhash) -> AES-256-GCM (WebCrypto)
+ * Client-side vault crypto:
+ * - KDF: Argon2id via libsodium (crypto_pwhash)
+ * - AEAD: AES-256-GCM via Node WebCrypto
+ * - Zero-knowledge: server never sees keys/plaintext
  */
-import * as sodium from "libsodium-wrappers-sumo";
+import sodium from "libsodium-wrappers-sumo"; // IMPORTANT: default import
 import { randomBytes, webcrypto as wc } from "crypto";
 const subtle = wc.subtle;
+/**
+ * Derive a 256-bit master key from a password using Argon2id.
+ * Why: resistant to GPU cracking and side-channels; standard choice for secrets.
+ */
 export async function deriveMasterKey(password, params = {}) {
-    await sodium.ready;
-    const salt = params.salt ?? randomBytes(16);
-    const key = sodium.crypto_pwhash(32, password, salt, params.opslimit ?? sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE, params.memlimit ?? sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE, sodium.crypto_pwhash_ALG_DEFAULT);
+    await sodium.ready; // ensure WASM is initialized
+    const salt = params.salt ?? randomBytes(16); // demo salt length; prefer 32 in production
+    const key = sodium.crypto_pwhash(32, // 256-bit key
+    password, salt, params.opslimit ?? sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE, params.memlimit ?? sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE, sodium.crypto_pwhash_ALG_DEFAULT // Argon2id
+    );
     return { key: new Uint8Array(key), salt };
 }
+/**
+ * Encrypt a plaintext entry with AES-256-GCM.
+ * Returns separate ct and tag so they’re explicit in the API contract.
+ */
 export async function encryptEntry(keyBytes, plaintext, meta) {
-    const iv = randomBytes(12);
+    const iv = randomBytes(12); // 96-bit nonce for GCM
     const cryptoKey = await subtle.importKey("raw", keyBytes, { name: "AES-GCM", length: 256 }, false, ["encrypt"]);
     const sealed = new Uint8Array(await subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, plaintext));
-    const tag = sealed.slice(sealed.length - 16);
-    const ct = sealed.slice(0, sealed.length - 16);
-    plaintext.fill(0); // best-effort zeroization
+    const tagLen = 16; // GCM tag 128 bits
+    const tag = sealed.slice(sealed.length - tagLen);
+    const ct = sealed.slice(0, sealed.length - tagLen);
+    // best-effort zeroization of input plaintext
+    plaintext.fill(0);
     return { iv: b64(iv), ct: b64(ct), tag: b64(tag), meta };
 }
+/**
+ * Decrypt a CipherItem back to plaintext bytes.
+ */
 export async function decryptEntry(keyBytes, item) {
     const iv = ub64(item.iv);
     const tag = ub64(item.tag);
@@ -29,8 +46,10 @@ export async function decryptEntry(keyBytes, item) {
     sealed.set(ct, 0);
     sealed.set(tag, ct.length);
     const cryptoKey = await subtle.importKey("raw", keyBytes, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-    return new Uint8Array(await subtle.decrypt({ name: "AES-GCM", iv }, cryptoKey, sealed));
+    const pt = await subtle.decrypt({ name: "AES-GCM", iv }, cryptoKey, sealed);
+    return new Uint8Array(pt);
 }
+/** Zero-fill buffers (why: reduce residual sensitive data in memory). */
 export function zeroize(...bufs) {
     for (const b of bufs)
         if (b)
