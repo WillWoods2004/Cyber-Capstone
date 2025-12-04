@@ -1,0 +1,29 @@
+openapi: 3.0.3
+info: { title: SecurityPass API, version: 0.1.0 }
+paths:
+  /healthz:
+    get: { responses: { "200": { description: ok } } }
+  /vault/items:
+    get:
+      responses: { "200": { description: list of ciphertext items } }
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ct, iv, tag]
+              properties:
+                ct:  { type: string }
+                iv:  { type: string }
+                tag: { type: string }
+                meta:{ type: object, additionalProperties: true }
+      responses: { "201": { description: created ciphertext item } }
+  /vault/items/{id}:
+    get:
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses: { "200": { description: item }, "404": { description: not found } }
+    delete:
+      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+      responses: { "204": { description: deleted } }
