@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import "./App.css";
+import "./dashboard.css"; // Import dashboard styles
 import Login from "./pages/Login";
 import MFAVerify from "./pages/MFAVerify";
 import Register from "./pages/Register";
-import PasswordGenerator from "./components/PasswordGenerator";
+import Dashboard from "./pages/Dashboard";
 
 type Screen = "login" | "register" | "mfa" | "dashboard";
 type Theme = "light" | "dark";
@@ -61,60 +62,62 @@ function App() {
     setScreen("login");
   };
 
+  const handleLogout = () => {
+    setCurrentUser("");
+    setMfaEnabled(false);
+    setScreen("login");
+  };
+
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
   return (
     <div className="app-root">
-      {/* theme toggle bar – added for our part */}
-      <div className="theme-toggle-container">
-        <button className="theme-toggle" onClick={toggleTheme}>
-          {themeLabel}
-        </button>
-      </div>
+      {/* Only show theme toggle on non-dashboard screens */}
+      {screen !== "dashboard" && (
+        <div className="theme-toggle-container">
+          <button className="theme-toggle" onClick={toggleTheme}>
+            {themeLabel}
+          </button>
+        </div>
+      )}
 
-      {/* original layout, kept but wrapped inside app-root */}
-      <div className="min-h-screen flex items-center justify-center">
-        {screen === "login" && (
+      {/* Conditional rendering based on screen */}
+      {screen === "login" && (
+        <div className="min-h-screen flex items-center justify-center">
           <Login
             onPasswordOk={handlePasswordOk}
             onShowRegister={handleShowRegister}
             initialUsername={lastRegisteredUsername}
           />
-        )}
+        </div>
+      )}
 
-        {screen === "register" && (
+      {screen === "register" && (
+        <div className="min-h-screen flex items-center justify-center">
           <Register
             onRegistered={handleRegistered}
             onCancel={handleCancelRegister}
           />
-        )}
+        </div>
+      )}
 
-        {screen === "mfa" && (
+      {screen === "mfa" && (
+        <div className="min-h-screen flex items-center justify-center">
           <MFAVerify
             username={currentUser}
             enrolled={mfaEnabled}
             onMfaOk={handleMfaOk}
           />
-        )}
+        </div>
+      )}
 
-        {screen === "dashboard" && (
-          <div className="card-wrapper">
-            <div className="auth-card auth-card-dashboard">
-              <h1 className="auth-title">Welcome!</h1>
-              <p className="auth-subtitle">
-                You have successfully logged in
-                {mfaEnabled ? " with MFA." : "."}
-              </p>
-              <p className="helper-text">
-                Logged in as <strong>{currentUser}</strong>
-              </p>
-
-              {/* our password generator feature */}
-              <PasswordGenerator />
-            </div>
-          </div>
-        )}
-      </div>
+      {screen === "dashboard" && (
+        <Dashboard
+          username={currentUser}
+          mfaEnabled={mfaEnabled}
+          onLogout={handleLogout}
+        />
+      )}
     </div>
   );
 }
