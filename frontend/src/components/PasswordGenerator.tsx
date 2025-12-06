@@ -1,4 +1,6 @@
+// Front-End/frontend/src/components/PasswordGenerator.tsx
 import { useState } from "react";
+import { useCrypto } from "../crypto/CryptoProvider"; // add
 
 type GeneratorOptions = {
   length: number;
@@ -42,6 +44,8 @@ const PasswordGenerator = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
+  const { encryptAndStore } = useCrypto(); // enable one-click save to vault
+
   const handleChange =
     (key: keyof GeneratorOptions) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,7 +77,7 @@ const PasswordGenerator = () => {
 
     const chars: string[] = [];
 
-    // ensure at least one of each selected type
+    // ensure at least one of each selected type (why: avoid missing a class)
     for (const pool of pools) {
       chars.push(pool[getRandomInt(pool.length)]);
     }
@@ -93,6 +97,24 @@ const PasswordGenerator = () => {
       await navigator.clipboard.writeText(password);
     } catch {
       // clipboard not available
+    }
+  };
+
+  const saveToVault = async () => {
+    if (!password) return;
+    try {
+      await encryptAndStore(password, {
+        label: "generated",
+        createdAt: new Date().toISOString(),
+        length: options.length,
+        lower: options.useLower,
+        upper: options.useUpper,
+        numbers: options.useNumbers,
+        symbols: options.useSymbols,
+      });
+      alert("Saved to vault.");
+    } catch (e: any) {
+      alert(`Save failed: ${e?.message ?? String(e)}`);
     }
   };
 
@@ -166,6 +188,15 @@ const PasswordGenerator = () => {
           disabled={!password}
         >
           Copy
+        </button>
+
+        <button
+          type="button"
+          className="pwgen-copy"
+          onClick={saveToVault}
+          disabled={!password}
+        >
+          Save to vault
         </button>
       </div>
 

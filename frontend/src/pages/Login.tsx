@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ErrorBox } from "../components/Error";
+import { useCrypto } from "../crypto/CryptoProvider";
 
 const MAX_ATTEMPTS = 3;
 const API_BASE =
@@ -24,17 +25,15 @@ export default function Login({
   const [attempts, setAttempts] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // our added state for Caps Lock warning
+  // Caps Lock warning
   const [capsOn, setCapsOn] = useState(false);
-
-  // our handler to detect Caps Lock on the password field
-  const handlePasswordKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement>
-  ) => {
-    const isCaps =
-      e.getModifierState && e.getModifierState("CapsLock");
+  const handlePasswordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const isCaps = e.getModifierState && e.getModifierState("CapsLock");
     setCapsOn(isCaps);
   };
+
+  // Crypto: derive key on success
+  const { setMasterPassword } = useCrypto();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,9 +49,7 @@ export default function Login({
 
       const response = await fetch(`${API_BASE}/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
 
@@ -70,7 +67,10 @@ export default function Login({
       }
 
       if (data.success) {
-        // Use backend-provided MFA status
+        // Derive client-side vault key (Argon2id) before moving on
+        await setMasterPassword(username, password);
+        setPassword(""); // reduce exposure
+
         const mfaFromApi = Boolean(data.mfaEnabled);
         onPasswordOk(mfaFromApi, username);
       } else {
@@ -124,7 +124,6 @@ export default function Login({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
-              // our caps lock detector
               onKeyDown={handlePasswordKeyDown}
             />
             {capsOn && (

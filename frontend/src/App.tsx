@@ -1,9 +1,11 @@
+// Front-End/frontend/src/App.tsx
 import { useEffect, useState } from "react";
 import "./App.css";
 import Login from "./pages/Login";
 import MFAVerify from "./pages/MFAVerify";
 import Register from "./pages/Register";
 import PasswordGenerator from "./components/PasswordGenerator";
+import VaultPanel from "./components/VaultPanel"; // add
 
 type Screen = "login" | "register" | "mfa" | "dashboard";
 type Theme = "light" | "dark";
@@ -65,7 +67,7 @@ function App() {
 
   return (
     <div className="app-root">
-      {/* theme toggle bar – added for our part */}
+      {/* theme toggle bar */}
       <div className="theme-toggle-container">
         <button className="theme-toggle" onClick={toggleTheme}>
           {themeLabel}
@@ -109,8 +111,16 @@ function App() {
                 Logged in as <strong>{currentUser}</strong>
               </p>
 
-              {/* our password generator feature */}
-              <PasswordGenerator />
+              {/* password generator + client-encrypted vault */}
+              <div style={{ display: "grid", gap: 16, gridTemplateColumns: "1fr 1fr" }}>
+                <section>
+                  <PasswordGenerator />
+                </section>
+                <section>
+                  <h3 style={{ marginTop: 0 }}>Vault (Client-Encrypted)</h3>
+                  <VaultPanel />
+                </section>
+              </div>
             </div>
           </div>
         )}
