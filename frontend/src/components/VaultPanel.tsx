@@ -4,9 +4,17 @@ import type { CipherBlob } from "../crypto/crypto";
 
 const API_BASE = import.meta.env.VITE_API_BASE as string;
 
+type VaultPanelProps = {
+  onCloudSave?: (
+    credentialId: string,
+    username: string,
+    password: string
+  ) => void | Promise<void>;
+};
+
 type Row = CipherBlob & { _idx: number };
 
-export default function VaultPanel() {
+export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
   const { isReady, encryptAndStore, listItems, decryptItem } = useCrypto();
   const [site, setSite] = useState("");
   const [login, setLogin] = useState("");
@@ -43,9 +51,23 @@ export default function VaultPanel() {
       const loginVal = login.trim();
       if (siteVal) meta.site = siteVal;
       if (loginVal) meta.login = loginVal;
+
+      // Encrypt and store in the client vault (existing behavior)
       await encryptAndStore(password, {
         ...meta,
       });
+
+      // NEW: optionally sync to cloud, without affecting local behavior
+      if (onCloudSave) {
+        const credentialId = `${siteVal || "item"}-${Date.now()}`;
+        try {
+          await onCloudSave(credentialId, loginVal || "", password);
+        } catch (e) {
+          console.error("Cloud save failed:", e);
+          // Intentionally do not rethrow so the local vault UX is unaffected
+        }
+      }
+
       setSite("");
       setLogin("");
       setPassword("");
@@ -109,9 +131,7 @@ export default function VaultPanel() {
         <button
           className="btn btn-primary"
           onClick={save}
-          disabled={
-            busy || !password.trim()
-          }
+          disabled={busy || !password.trim()}
         >
           Save
         </button>
