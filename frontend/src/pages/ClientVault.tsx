@@ -1,8 +1,7 @@
-// frontend/src/pages/ClientVault.tsx
-
 import VaultPanel from "../components/VaultPanel";
 
 type ClientVaultProps = {
+  currentUser: string;
   onCloudSave?: (
     credentialId: string,
     accountUsername: string,
@@ -10,7 +9,10 @@ type ClientVaultProps = {
   ) => void | Promise<void>;
 };
 
-export default function ClientVault({ onCloudSave }: ClientVaultProps) {
+export default function ClientVault({
+  currentUser,
+  onCloudSave,
+}: ClientVaultProps) {
   return (
     <div className="client-vault-page">
       <div className="client-vault-header">
@@ -27,7 +29,10 @@ export default function ClientVault({ onCloudSave }: ClientVaultProps) {
 
       <div className="client-vault-grid">
         <div className="client-vault-card">
-          <VaultPanel onCloudSave={onCloudSave} />
+          <VaultPanel
+            currentUser={currentUser}
+            onCloudSave={onCloudSave}
+          />
         </div>
       </div>
     </div>
