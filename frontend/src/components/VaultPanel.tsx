@@ -59,15 +59,14 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
         ...meta,
       });
 
-      // NEW: optionally sync to cloud for the logged-in user
+      // NEW: optionally sync to cloud for the current SecurityPass user
       if (onCloudSave) {
-        // Use a stable id that includes the site; this becomes credentialId in DynamoDB
         const credentialId = `${siteVal || "item"}-${Date.now()}`;
         try {
           await onCloudSave(credentialId, loginVal || "", password);
         } catch (e) {
           console.error("Cloud save failed:", e);
-          // Do not rethrow – local vault should still succeed
+          // Do not rethrow – local vault must stay functional
         }
       }
 
