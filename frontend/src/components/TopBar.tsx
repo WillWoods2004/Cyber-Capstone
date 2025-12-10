@@ -10,7 +10,10 @@ export default function TopBar({
   return (
     <div className="topbar">
       <div className="topbar-search">
-        <span className="search-icon">dY"?</span>
+        {/* Search icon on the left of the input */}
+        <span className="search-icon" aria-hidden="true">
+          🔍
+        </span>
         <input
           type="text"
           placeholder="Search passwords, websites, usernames..."
@@ -19,13 +22,19 @@ export default function TopBar({
       </div>
 
       <div className="topbar-actions">
-        <button className="topbar-icon-btn">
-          <span className="notification-badge">dY""</span>
+        {/* Notification icon / badge – empty text so nothing weird shows */}
+        <button className="topbar-icon-btn" aria-label="Notifications">
+          <span className="notification-badge" aria-hidden="true" />
         </button>
-        <button className="topbar-add-btn secondary" onClick={onGeneratePassword}>
+
+        <button
+          className="topbar-add-btn secondary"
+          onClick={onGeneratePassword}
+        >
           <span>⚡</span>
           <span>Generator</span>
         </button>
+
         <button className="topbar-add-btn" onClick={onAddPassword}>
           <span>＋</span>
           <span>Add Password</span>
