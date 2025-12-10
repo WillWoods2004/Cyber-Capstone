@@ -10,7 +10,6 @@ import SecurityOverview from "../components/SecurityOverview";
 import QuickActions from "../components/QuickActions";
 import PasswordGenerator from "../components/PasswordGenerator";
 import ClientVault from "./ClientVault";
-
 import { saveCredentialToCloud } from "../api/saveCredential";
 
 type DashboardProps = {
@@ -41,7 +40,10 @@ export default function Dashboard({
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
-  // This ties each credential to the current SecurityPass user.
+  /**
+   * Tie each saved credential to the currently logged-in SecurityPass user.
+   * userId in DynamoDB = Dashboard `username` prop.
+   */
   const handleCloudSave = async (
     credentialId: string,
     siteUsername: string,
@@ -49,7 +51,7 @@ export default function Dashboard({
   ) => {
     try {
       const ok = await saveCredentialToCloud(
-        username, // userId in SecurityPassCredentials = logged-in SecurityPassUsers.username
+        username, // userId in SecurityPassCredentials
         credentialId,
         siteUsername,
         sitePassword
