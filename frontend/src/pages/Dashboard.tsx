@@ -7,55 +7,35 @@ import ActivityFeed from "../components/ActivityFeed";
 import SecurityOverview from "../components/SecurityOverview";
 import QuickActions from "../components/QuickActions";
 import PasswordGenerator from "../components/PasswordGenerator";
-import { saveCredentialToCloud } from "../api/saveCredential";
+import ClientVault from "./ClientVault";
 
 type DashboardProps = {
   username: string;
   mfaEnabled: boolean;
   onLogout?: () => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 };
 
-type ActiveView = "dashboard" | "passwords" | "generator" | "security" | "settings";
+type ActiveView =
+  | "dashboard"
+  | "passwords"
+  | "generator"
+  | "clientVault"
+  | "security"
+  | "settings";
 
 export default function Dashboard({
   username,
   mfaEnabled,
   onLogout,
+  theme,
+  onToggleTheme,
 }: DashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
-  const [showGeneratorModal, setShowGeneratorModal] = useState(false); // still unused but harmless
 
-  // NEW: state for the "Add Password" form
-  const [siteName, setSiteName] = useState("");
-  const [accountUsername, setAccountUsername] = useState("");
-  const [accountPassword, setAccountPassword] = useState("");
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
-
-  const handleSaveToCloud = async () => {
-    if (!siteName || !accountUsername || !accountPassword) {
-      setSaveStatus("❌ Please fill out all fields before saving.");
-      return;
-    }
-
-    setSaveStatus("Saving...");
-
-    const success = await saveCredentialToCloud(
-      username,      // userId in DynamoDB
-      siteName,      // credentialId (we're using site/app name)
-      accountUsername,
-      accountPassword
-    );
-
-    if (success) {
-      setSaveStatus("✅ Password saved to AWS!");
-      setSiteName("");
-      setAccountUsername("");
-      setAccountPassword("");
-    } else {
-      setSaveStatus("❌ Failed to save password.");
-    }
-  };
+  const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
   return (
     <div className="dashboard-container">
@@ -63,15 +43,13 @@ export default function Dashboard({
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         activeView={activeView}
-        onViewChange={setActiveView}
+        onViewChange={(view) => setActiveView(view as ActiveView)}
         username={username}
       />
 
       <div className="dashboard-main">
         <TopBar
-          // OLD: onAddPassword={() => alert("Add password functionality")}
-          // NEW: go to the "passwords" view where our form lives
-          onAddPassword={() => setActiveView("passwords")}
+          onAddPassword={() => alert("Add password functionality")}
           onGeneratePassword={() => setActiveView("generator")}
         />
 
@@ -118,50 +96,17 @@ export default function Dashboard({
             </div>
           )}
 
+          {activeView === "clientVault" && (
+            <div className="client-vault-wrapper">
+              <ClientVault />
+            </div>
+          )}
+
           {activeView === "passwords" && (
             <div className="passwords-page">
-              <h2 className="dashboard-title">Save New Password</h2>
-              <p className="dashboard-subtitle">
-                Store your credentials securely in the cloud via AWS Lambda & DynamoDB.
-              </p>
-
-              <div className="generator-wrapper">
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.75rem",
-                  }}
-                >
-                  <input
-                    placeholder="Website / App Name (e.g. GitHub)"
-                    value={siteName}
-                    onChange={(e) => setSiteName(e.target.value)}
-                    className="topbar-search-input"
-                  />
-
-                  <input
-                    placeholder="Account Username / Email"
-                    value={accountUsername}
-                    onChange={(e) => setAccountUsername(e.target.value)}
-                    className="topbar-search-input"
-                  />
-
-                  <input
-                    placeholder="Account Password"
-                    type="password"
-                    value={accountPassword}
-                    onChange={(e) => setAccountPassword(e.target.value)}
-                    className="topbar-search-input"
-                  />
-
-                  <button className="topbar-add-btn" onClick={handleSaveToCloud}>
-                    Save to Cloud
-                  </button>
-
-                  {saveStatus && <p>{saveStatus}</p>}
-                </div>
-              </div>
+              <h2 className="dashboard-title">All Passwords</h2>
+              <p className="dashboard-subtitle">Manage your stored passwords</p>
+              {/* Add your password vault component here */}
             </div>
           )}
 
@@ -178,6 +123,14 @@ export default function Dashboard({
               <p className="dashboard-subtitle">
                 Configure your account preferences
               </p>
+
+              {/* Theme toggle inside Settings */}
+              <div className="theme-toggle-container">
+                <button className="theme-toggle" onClick={onToggleTheme}>
+                  {themeLabel}
+                </button>
+              </div>
+
               {onLogout && (
                 <button className="logout-btn" onClick={onLogout}>
                   Logout
@@ -190,4 +143,3 @@ export default function Dashboard({
     </div>
   );
 }
-
