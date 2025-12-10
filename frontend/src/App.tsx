@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-import "./dashboard.css"; // Import dashboard styles
+import "./dashboard.css";
 import Login from "./pages/Login";
 import MFAVerify from "./pages/MFAVerify";
 import Register from "./pages/Register";

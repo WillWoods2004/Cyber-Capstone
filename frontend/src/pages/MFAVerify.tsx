@@ -15,7 +15,7 @@ interface Props {
 type Mode = "setup" | "verify";
 
 export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
-  const [mode, setMode] = useState<Mode>(enrolled ? "verify" : "setup");
+  const [mode] = useState<Mode>(enrolled ? "verify" : "setup");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

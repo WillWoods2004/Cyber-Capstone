@@ -27,13 +27,17 @@ export default function IndexPage() {
   }, []);
 
   // Called when Login.tsx says authentication succeeded
-  const handlePasswordOk = () => {
+  const handlePasswordOk = (_mfaFromApi: boolean, username: string) => {
     const storedUser = localStorage.getItem("authUser");
     if (storedUser) {
       try {
         const parsed: AuthUser = JSON.parse(storedUser);
         setUser(parsed);
-      } catch {}
+      } catch {
+        setUser({ username });
+      }
+    } else {
+      setUser({ username });
     }
     setIsAuthed(true);
   };
@@ -50,7 +54,10 @@ export default function IndexPage() {
     return (
       <div className="app-root">
         <div className="center-content">
-          <Login onPasswordOk={handlePasswordOk} />
+          <Login
+            onPasswordOk={handlePasswordOk}
+            onShowRegister={() => {}}
+          />
         </div>
       </div>
     );

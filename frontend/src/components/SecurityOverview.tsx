@@ -2,7 +2,7 @@ type SecurityOverviewProps = {
   expanded?: boolean;
 };
 
-export default function SecurityOverview({ expanded = false }: SecurityOverviewProps) {
+export default function SecurityOverview({ expanded: _expanded = false }: SecurityOverviewProps) {
   const securityIssues = [
     { type: "Weak Password", count: 3, severity: "high" },
     { type: "Duplicate Password", count: 2, severity: "medium" },

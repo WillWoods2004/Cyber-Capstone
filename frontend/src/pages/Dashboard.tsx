@@ -7,6 +7,7 @@ import ActivityFeed from "../components/ActivityFeed";
 import SecurityOverview from "../components/SecurityOverview";
 import QuickActions from "../components/QuickActions";
 import PasswordGenerator from "../components/PasswordGenerator";
+import ClientVault from "./ClientVault";
 
 type DashboardProps = {
   username: string;
@@ -14,12 +15,17 @@ type DashboardProps = {
   onLogout?: () => void;
 };
 
-type ActiveView = "dashboard" | "passwords" | "generator" | "security" | "settings";
+type ActiveView =
+  | "dashboard"
+  | "passwords"
+  | "generator"
+  | "clientVault"
+  | "security"
+  | "settings";
 
 export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
-  const [showGeneratorModal, setShowGeneratorModal] = useState(false);
 
   return (
     <div className="dashboard-container">
@@ -27,7 +33,7 @@ export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardP
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         activeView={activeView}
-        onViewChange={setActiveView}
+        onViewChange={(view) => setActiveView(view as ActiveView)}
         username={username}
       />
 
@@ -75,6 +81,12 @@ export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardP
               <div className="generator-wrapper">
                 <PasswordGenerator />
               </div>
+            </div>
+          )}
+
+          {activeView === "clientVault" && (
+            <div className="client-vault-wrapper">
+              <ClientVault />
             </div>
           )}
 

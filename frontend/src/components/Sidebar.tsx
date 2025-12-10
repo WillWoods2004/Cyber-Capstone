@@ -6,11 +6,18 @@ type SidebarProps = {
   username: string;
 };
 
-export default function Sidebar({ isOpen, onToggle, activeView, onViewChange, username }: SidebarProps) {
+export default function Sidebar({
+  isOpen,
+  onToggle,
+  activeView,
+  onViewChange,
+  username,
+}: SidebarProps) {
   const menuItems = [
     { id: "dashboard", icon: "🏠", label: "Dashboard" },
-    { id: "passwords", icon: "🔒", label: "Passwords" },
-    { id: "generator", icon: "🔑", label: "Generator" },
+    { id: "passwords", icon: "🔑", label: "Passwords" },
+    { id: "generator", icon: "⚡", label: "Generator" },
+    { id: "clientVault", icon: "🔐", label: "Client Vault" },
     { id: "security", icon: "🛡️", label: "Security" },
     { id: "settings", icon: "⚙️", label: "Settings" },
   ];
@@ -21,7 +28,7 @@ export default function Sidebar({ isOpen, onToggle, activeView, onViewChange, us
       <div className="sidebar-header">
         {isOpen && <h1 className="sidebar-logo">SecureVault</h1>}
         <button className="sidebar-toggle" onClick={onToggle}>
-          {isOpen ? "✕" : "☰"}
+          {isOpen ? "‹" : "›"}
         </button>
       </div>
 
@@ -31,7 +38,9 @@ export default function Sidebar({ isOpen, onToggle, activeView, onViewChange, us
           <button
             key={item.id}
             onClick={() => onViewChange(item.id)}
-            className={`sidebar-item ${activeView === item.id ? "sidebar-item-active" : ""}`}
+            className={`sidebar-item ${
+              activeView === item.id ? "sidebar-item-active" : ""
+            }`}
           >
             <span className="sidebar-icon">{item.icon}</span>
             {isOpen && <span className="sidebar-label">{item.label}</span>}
@@ -42,7 +51,7 @@ export default function Sidebar({ isOpen, onToggle, activeView, onViewChange, us
       {/* User Profile */}
       <div className="sidebar-footer">
         <div className="sidebar-user">
-          <div className="sidebar-avatar">👤</div>
+          <div className="sidebar-avatar">S</div>
           {isOpen && (
             <div className="sidebar-user-info">
               <p className="sidebar-username">{username}</p>

@@ -1,0 +1,8 @@
+# node / build
+node_modules/
+dist/
+*.map
+
+# local artifacts
+cipher.json
+.env

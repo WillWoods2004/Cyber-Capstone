@@ -1,0 +1,19 @@
+{
+  "name": "securitypass-sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.10",
+    "@vitest/coverage-v8": "^4.0.10"
+  },
+  "dependencies": {
+    "libsodium-wrappers-sumo": "^0.7.15"
+  }
+}

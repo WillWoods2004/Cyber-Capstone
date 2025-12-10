@@ -1,3 +1,4 @@
+/* ========== BASE APP LAYOUT ========== */
 .app-root {
   min-height: 100vh;
   width: 100%;
@@ -27,7 +28,7 @@
   padding: 1.5rem;
 }
 
-/* The actual card gets the fixed width */
+/* The actual card gets the fixed width (login/register views) */
 .auth-card {
   background: var(--bg-card);
   border-radius: 16px;
@@ -168,6 +169,9 @@
 
 .auth-card-dashboard {
   text-align: center;
+  /* Widen the dashboard card so the two columns fit comfortably */
+  max-width: 960px;
+  width: 100%;
 }
 
 .auth-card-dashboard .auth-subtitle {
@@ -182,6 +186,13 @@
   margin-left: auto;
   margin-right: auto;
   text-align: left;
+}
+
+/* When inside dashboard, let the generator fill its grid column */
+.auth-card-dashboard .pwgen {
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .pwgen-title {
@@ -300,7 +311,6 @@
   color: #facc15;
 }
 
-
 /* ===========================================
    FINAL POLISH (VISUAL IMPROVEMENT ONLY)
    =========================================== */
@@ -332,4 +342,95 @@
 .auth-subtitle {
   font-size: 1rem;
   opacity: 0.9;
+}
+
+/* ============================
+   VAULT PANEL (new styles)
+   ============================ */
+
+.vault-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+@media (max-width: 920px) { .vault-grid { grid-template-columns: 1fr; } }
+
+.vault { display: grid; gap: 12px; text-align: left; }
+.vault-toolbar { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+.vault-input {
+  width: 100%; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border-subtle); background: var(--input-bg); color: var(--text-main);
+}
+
+.vault-table-wrap { overflow: auto; border: 1px solid var(--border-subtle); border-radius: 12px; }
+.vault-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.vault-table th, .vault-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
+.vault-table th { text-align: left; opacity: 0.9; font-weight: 600; }
+.vault-id { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; opacity: 0.9; }
+.vault-meta .mono.small { font-size: 0.85rem; word-break: break-word; }
+.vault-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+.vault-output {
+  display: flex; gap: 8px; align-items: center;
+  padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,0.03);
+}
+
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+.small { font-size: 0.85rem; }
+.muted { opacity: 0.75; }
+.error { color: #ff6b6b; }
+
+.btn { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-subtle); background: transparent; color: inherit; cursor: pointer; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-primary { background: #4f7cff; border-color: #4f7cff; color: white; }
+.btn-danger { background: #ff3b3b; border-color: #ff3b3b; color: white; }
+
+/* Client-encrypted vault page */
+.client-vault-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.client-vault-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.client-vault-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.client-vault-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2);
+}
+
+/* Client-encrypted vault page */
+.client-vault-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.client-vault-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.client-vault-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.client-vault-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2);
 }
