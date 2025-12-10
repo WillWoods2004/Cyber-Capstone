@@ -25,7 +25,10 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [decrypted, setDecrypted] = useState<string | null>(null);
-  const [selectedMeta, setSelectedMeta] = useState<{ site?: string; login?: string } | null>(null);
+  const [selectedMeta, setSelectedMeta] = useState<{
+    site?: string;
+    login?: string;
+  } | null>(null);
 
   async function refresh() {
     setBusy(true);
@@ -59,14 +62,14 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
         ...meta,
       });
 
-      // NEW: optionally sync to cloud for the current SecurityPass user
+      // NEW: optionally sync to cloud (per-user) without affecting local vault
       if (onCloudSave) {
         const credentialId = `${siteVal || "item"}-${Date.now()}`;
         try {
           await onCloudSave(credentialId, loginVal || "", password);
         } catch (e) {
           console.error("Cloud save failed:", e);
-          // Do not rethrow – local vault must stay functional
+          // intentionally not rethrowing so local UX remains intact
         }
       }
 
@@ -88,8 +91,12 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch(`${API_BASE}/vault/items/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 204) throw new Error(`Delete failed: ${res.status}`);
+      const res = await fetch(`${API_BASE}/vault/items/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok && res.status !== 204) {
+        throw new Error(`Delete failed: ${res.status}`);
+      }
       if (decrypted) {
         setDecrypted(null);
         setSelectedMeta(null);
@@ -106,7 +113,8 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
     if (isReady) void refresh();
   }, [isReady]);
 
-  if (!isReady) return <div className="muted">Login to derive your vault key…</div>;
+  if (!isReady)
+    return <div className="muted">Login to derive your vault key…</div>;
 
   return (
     <div className="vault">
@@ -144,7 +152,8 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
 
       {err && <div className="error">{err}</div>}
       <div className="muted small" style={{ marginBottom: 8 }}>
-        Password is required. Site/login are optional but recommended so you can recognize the entry.
+        Password is required. Site/login are optional but recommended so you can
+        recognize the entry.
       </div>
 
       <div className="vault-table-wrap">
@@ -171,7 +180,9 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
                     {(r.id ?? "").slice(0, 8) || "-"}
                   </td>
                   <td className="vault-meta">{(r.meta as any)?.site ?? "-"}</td>
-                  <td className="vault-meta">{(r.meta as any)?.login ?? "-"}</td>
+                  <td className="vault-meta">
+                    {(r.meta as any)?.login ?? "-"}
+                  </td>
                   <td className="vault-actions">
                     <button
                       className="btn btn-primary"
@@ -187,7 +198,11 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
                       Decrypt
                     </button>
                     {r.id && (
-                      <button className="btn btn-danger" onClick={() => remove(r.id)} disabled={busy}>
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => remove(r.id)}
+                        disabled={busy}
+                      >
                         Delete
                       </button>
                     )}
@@ -202,7 +217,8 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
       {decrypted !== null && (
         <div className="vault-output">
           <div className="muted">
-            {selectedMeta?.site ?? "Item"} — {selectedMeta?.login ?? "login not set"}
+            {selectedMeta?.site ?? "Item"} —{" "}
+            {selectedMeta?.login ?? "login not set"}
           </div>
           <div>
             <span className="muted">Decrypted password:</span>{" "}
@@ -212,7 +228,9 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(decrypted);
-                } catch {}
+                } catch {
+                  // ignore clipboard failures
+                }
               }}
             >
               Copy
