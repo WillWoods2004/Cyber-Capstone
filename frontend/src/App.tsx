@@ -105,8 +105,9 @@ function App() {
         <div className="min-h-screen flex items-center justify-center">
           <MFAVerify
             username={currentUser}
-            enrolled={mfaEnabled}
+            mfaEnabled={mfaEnabled}
             onMfaOk={handleMfaOk}
+            onCancel={() => setScreen("login")}
           />
         </div>
       )}
@@ -116,6 +117,8 @@ function App() {
           username={currentUser}
           mfaEnabled={mfaEnabled}
           onLogout={handleLogout}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       )}
     </div>
