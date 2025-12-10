@@ -1,4 +1,3 @@
-import PasswordGenerator from "../components/PasswordGenerator";
 import VaultPanel from "../components/VaultPanel";
 
 export default function ClientVault() {
@@ -14,9 +13,7 @@ export default function ClientVault() {
       </div>
 
       <div className="client-vault-grid">
-        <div className="client-vault-card">
-          <PasswordGenerator />
-        </div>
+        {/* Removed only the PasswordGenerator card — everything else untouched */}
         <div className="client-vault-card">
           <VaultPanel />
         </div>
