@@ -1,3 +1,5 @@
+// frontend/src/pages/ClientVault.tsx
+
 import VaultPanel from "../components/VaultPanel";
 
 type ClientVaultProps = {
