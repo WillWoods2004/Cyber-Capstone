@@ -1,5 +1,3 @@
-// frontend/src/api/saveCredential.ts
-
 const API_BASE =
   "https://5y6lvgdx08.execute-api.us-east-1.amazonaws.com/prod";
 
