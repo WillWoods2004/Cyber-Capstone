@@ -1,3 +1,5 @@
+// frontend/src/components/VaultPanel.tsx
+
 import { useEffect, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
@@ -52,19 +54,20 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
       if (siteVal) meta.site = siteVal;
       if (loginVal) meta.login = loginVal;
 
-      // Encrypt and store in the client vault (existing behavior)
+      // Existing behavior: encrypt and store in client vault
       await encryptAndStore(password, {
         ...meta,
       });
 
-      // NEW: optionally sync to cloud, without affecting local behavior
+      // NEW: optionally sync to cloud for the logged-in user
       if (onCloudSave) {
+        // Use a stable id that includes the site; this becomes credentialId in DynamoDB
         const credentialId = `${siteVal || "item"}-${Date.now()}`;
         try {
           await onCloudSave(credentialId, loginVal || "", password);
         } catch (e) {
           console.error("Cloud save failed:", e);
-          // Intentionally do not rethrow so the local vault UX is unaffected
+          // Do not rethrow – local vault should still succeed
         }
       }
 
