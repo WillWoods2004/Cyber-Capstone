@@ -1,227 +1,197 @@
-import { useEffect, useState } from "react";
-import { useCrypto } from "../crypto/CryptoProvider";
-import type { CipherBlob } from "../crypto/crypto";
-
-const API_BASE = import.meta.env.VITE_API_BASE as string;
-
-type Row = CipherBlob & { _idx: number };
+import { FormEvent, useEffect, useState } from "react";
 
 type VaultPanelProps = {
-  // OPTIONAL: if provided, will be called after a local save to sync to AWS
   onCloudSave?: (
     credentialId: string,
     accountUsername: string,
     accountPassword: string
-  ) => Promise<void>;
+  ) => void | Promise<void>;
 };
 
+type LocalCredential = {
+  id: string;
+  label: string;
+  username: string;
+  password: string;
+  createdAt: string;
+  synced?: boolean;
+};
+
+const LOCAL_STORAGE_KEY = "securitypass_local_vault";
+
 export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
-  const { isReady, encryptAndStore, listItems, decryptItem } = useCrypto();
-  const [site, setSite] = useState("");
-  const [login, setLogin] = useState("");
-  const [password, setPassword] = useState("");
-  const [rows, setRows] = useState<Row[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [decrypted, setDecrypted] = useState<string | null>(null);
-  const [selectedMeta, setSelectedMeta] = useState<{ site?: string; login?: string } | null>(null);
+  const [label, setLabel] = useState("");
+  const [accountUsername, setAccountUsername] = useState("");
+  const [accountPassword, setAccountPassword] = useState("");
+  const [credentials, setCredentials] = useState<LocalCredential[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
 
-  async function refresh() {
-    setBusy(true);
-    setErr(null);
-    setDecrypted(null);
-    setSelectedMeta(null);
-    try {
-      const items = await listItems();
-      setRows(items.map((it, i) => ({ ...it, _idx: i })));
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function save() {
-    setBusy(true);
-    setErr(null);
-    try {
-      const meta: Record<string, unknown> = {
-        createdAt: new Date().toISOString(),
-      };
-      const siteVal = site.trim();
-      const loginVal = login.trim();
-      if (siteVal) meta.site = siteVal;
-      if (loginVal) meta.login = loginVal;
-
-      // 🔐 1. Client-side encrypt & store (existing behavior)
-      await encryptAndStore(password, {
-        ...meta,
-      });
-
-      // ☁️ 2. OPTIONAL: sync to cloud backend (AWS) if handler provided
-      if (onCloudSave) {
-        // Use site as the credentialId; fall back to a generic label if blank
-        const credentialId = siteVal || "Unnamed Site";
-        const accountUsername = loginVal || "Unknown User";
-        await onCloudSave(credentialId, accountUsername, password);
-      }
-
-      // 3. Reset local form + refresh view (existing behavior)
-      setSite("");
-      setLogin("");
-      setPassword("");
-      setDecrypted(null);
-      setSelectedMeta(null);
-      await refresh();
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function remove(id?: string) {
-    if (!id) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const res = await fetch(`${API_BASE}/vault/items/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 204) throw new Error(`Delete failed: ${res.status}`);
-      if (decrypted) {
-        setDecrypted(null);
-        setSelectedMeta(null);
-      }
-      await refresh();
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  // Load locally-stored credentials on mount
   useEffect(() => {
-    if (isReady) void refresh();
-  }, [isReady]);
+    try {
+      const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (!raw) return;
 
-  if (!isReady) return <div className="muted">Login to derive your vault key…</div>;
+      const parsed = JSON.parse(raw) as LocalCredential[];
+      if (Array.isArray(parsed)) {
+        setCredentials(parsed);
+      }
+    } catch (err) {
+      console.error("Failed to load local vault:", err);
+    }
+  }, []);
+
+  // Persist to localStorage whenever the list changes
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        LOCAL_STORAGE_KEY,
+        JSON.stringify(credentials)
+      );
+    } catch (err) {
+      console.error("Failed to persist local vault:", err);
+    }
+  }, [credentials]);
+
+  const handleAdd = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!label.trim() || !accountUsername.trim() || !accountPassword.trim()) {
+      return;
+    }
+
+    const id = `${label.trim()}-${Date.now()}`;
+    const createdAt = new Date().toISOString();
+
+    const newCredential: LocalCredential = {
+      id,
+      label: label.trim(),
+      username: accountUsername.trim(),
+      password: accountPassword,
+      createdAt,
+    };
+
+    setIsSaving(true);
+
+    try {
+      // Save locally first so UX is snappy
+      setCredentials((prev) => [newCredential, ...prev]);
+
+      // Optionally push to cloud
+      if (onCloudSave) {
+        try {
+          await onCloudSave(id, newCredential.username, newCredential.password);
+          setCredentials((prev) =>
+            prev.map((c) =>
+              c.id === id
+                ? {
+                    ...c,
+                    synced: true,
+                  }
+                : c
+            )
+          );
+        } catch (err) {
+          console.error("Cloud save failed for credential:", id, err);
+        }
+      }
+
+      // Clear form
+      setLabel("");
+      setAccountUsername("");
+      setAccountPassword("");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
-    <div className="vault">
-      <div className="vault-toolbar">
-        <input
-          className="vault-input"
-          placeholder="Website (e.g., gmail.com)"
-          value={site}
-          onChange={(e) => setSite(e.target.value)}
-        />
-        <input
-          className="vault-input"
-          placeholder="Login / email (e.g., user@gmail.com)"
-          value={login}
-          onChange={(e) => setLogin(e.target.value)}
-        />
-        <input
-          className="vault-input"
-          type="password"
-          placeholder="Password to encrypt"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button
-          className="btn btn-primary"
-          onClick={save}
-          disabled={busy || !password.trim()}
-        >
-          Save
-        </button>
-        <button className="btn" onClick={refresh} disabled={busy}>
-          Refresh
-        </button>
+    <div className="vault-panel">
+      <div className="vault-header">
+        <h3 className="vault-title">Local Vault</h3>
+        <p className="vault-subtitle">
+          Store credentials locally in your browser. When enabled, entries can
+          also be synced securely to your cloud vault.
+        </p>
       </div>
 
-      {err && <div className="error">{err}</div>}
-      <div className="muted small" style={{ marginBottom: 8 }}>
-        Password is required. Site/login are optional but recommended so you can
-        recognize the entry.
-      </div>
-
-      <div className="vault-table-wrap">
-        <table className="vault-table">
-          <thead>
-            <tr>
-              <th style={{ width: 160 }}>ID</th>
-              <th>Site</th>
-              <th>User / Email</th>
-              <th style={{ width: 180 }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="muted">
-                  No items yet.
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id ?? r._idx}>
-                  <td className="vault-id" title={r.id ?? ""}>
-                    {(r.id ?? "").slice(0, 8) || "-"}
-                  </td>
-                  <td className="vault-meta">{(r.meta as any)?.site ?? "-"}</td>
-                  <td className="vault-meta">{(r.meta as any)?.login ?? "-"}</td>
-                  <td className="vault-actions">
-                    <button
-                      className="btn btn-primary"
-                      onClick={async () => {
-                        setDecrypted(await decryptItem(r));
-                        setSelectedMeta({
-                          site: (r.meta as any)?.site,
-                          login: (r.meta as any)?.login,
-                        });
-                      }}
-                      disabled={busy}
-                    >
-                      Decrypt
-                    </button>
-                    {r.id && (
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => remove(r.id)}
-                        disabled={busy}
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {decrypted !== null && (
-        <div className="vault-output">
-          <div className="muted">
-            {selectedMeta?.site ?? "Item"} — {selectedMeta?.login ?? "login not set"}
+      <form className="vault-form" onSubmit={handleAdd}>
+        <div className="vault-form-row">
+          <div className="vault-field">
+            <label className="vault-label">Site / App name</label>
+            <input
+              className="vault-input"
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Example: banking portal"
+            />
           </div>
-          <div>
-            <span className="muted">Decrypted password:</span>{" "}
-            <code className="mono">{decrypted}</code>
-            <button
-              className="btn"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(decrypted);
-                } catch {}
-              }}
-            >
-              Copy
-            </button>
+
+          <div className="vault-field">
+            <label className="vault-label">Username / Email</label>
+            <input
+              className="vault-input"
+              type="text"
+              value={accountUsername}
+              onChange={(e) => setAccountUsername(e.target.value)}
+              placeholder="example@domain.com"
+            />
           </div>
         </div>
-      )}
+
+        <div className="vault-form-row">
+          <div className="vault-field">
+            <label className="vault-label">Password</label>
+            <input
+              className="vault-input"
+              type="password"
+              value={accountPassword}
+              onChange={(e) => setAccountPassword(e.target.value)}
+              placeholder="Paste or type password"
+            />
+          </div>
+        </div>
+
+        <div className="vault-actions">
+          <button
+            type="submit"
+            className="vault-save-btn"
+            disabled={isSaving}
+          >
+            {isSaving ? "Saving..." : "Save to local vault"}
+          </button>
+        </div>
+      </form>
+
+      <div className="vault-list">
+        <h4 className="vault-list-title">Recent entries</h4>
+        {credentials.length === 0 && (
+          <p className="vault-empty">No credentials saved yet.</p>
+        )}
+
+        {credentials.length > 0 && (
+          <ul className="vault-list-items">
+            {credentials.map((cred) => (
+              <li key={cred.id} className="vault-list-item">
+                <div className="vault-list-main">
+                  <div className="vault-list-label">{cred.label}</div>
+                  <div className="vault-list-username">
+                    {cred.username || "No username"}
+                  </div>
+                </div>
+                <div className="vault-list-meta">
+                  <span className="vault-list-date">
+                    {new Date(cred.createdAt).toLocaleString()}
+                  </span>
+                  {cred.synced && (
+                    <span className="vault-list-synced">Synced to cloud</span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
