@@ -9,7 +9,6 @@ import QuickActions from "../components/QuickActions";
 import PasswordGenerator from "../components/PasswordGenerator";
 import ClientVault from "./ClientVault";
 
-// ✅ NEW: import your AWS helper
 import { saveCredentialToCloud } from "../api/saveCredential";
 
 type DashboardProps = {
@@ -40,8 +39,7 @@ export default function Dashboard({
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
-  // ✅ NEW: handler that the vault can call to save to AWS
-  // You can decide what you want to use as `credentialId` (e.g. site name or UUID)
+  // Cloud save handler wired into the client vault
   const handleCloudSave = async (
     credentialId: string,
     accountUsername: string,
@@ -49,8 +47,8 @@ export default function Dashboard({
   ) => {
     try {
       const ok = await saveCredentialToCloud(
-        username,        // userId in DynamoDB
-        credentialId,    // e.g. site/app name
+        username, // userId in DynamoDB
+        credentialId,
         accountUsername,
         accountPassword
       );
@@ -75,7 +73,6 @@ export default function Dashboard({
 
       <div className="dashboard-main">
         <TopBar
-          // unchanged: Add Password still opens the client-side vault view
           onAddPassword={() => setActiveView("clientVault")}
           onGeneratePassword={() => setActiveView("generator")}
         />
@@ -83,7 +80,6 @@ export default function Dashboard({
         <div className="dashboard-content">
           {activeView === "dashboard" && (
             <>
-              {/* Welcome Section */}
               <div className="welcome-section">
                 <h2 className="dashboard-title">Welcome back, {username}!</h2>
                 <p className="dashboard-subtitle">
@@ -91,10 +87,8 @@ export default function Dashboard({
                 </p>
               </div>
 
-              {/* Stats Cards */}
               <StatsCards />
 
-              {/* Main Grid */}
               <div className="dashboard-grid">
                 <div className="grid-col-2">
                   <RecentPasswords />
@@ -125,7 +119,6 @@ export default function Dashboard({
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              {/* ✅ Pass the cloud-save handler into your vault */}
               <ClientVault onCloudSave={handleCloudSave} />
             </div>
           )}
@@ -134,7 +127,6 @@ export default function Dashboard({
             <div className="passwords-page">
               <h2 className="dashboard-title">All Passwords</h2>
               <p className="dashboard-subtitle">Manage your stored passwords</p>
-              {/* Add your password vault component here if you build a second view */}
             </div>
           )}
 
@@ -152,7 +144,6 @@ export default function Dashboard({
                 Configure your account preferences
               </p>
 
-              {/* Theme toggle inside Settings */}
               <div className="theme-toggle-container">
                 <button className="theme-toggle" onClick={onToggleTheme}>
                   {themeLabel}
