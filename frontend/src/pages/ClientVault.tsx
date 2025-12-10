@@ -1,3 +1,4 @@
+import PasswordGenerator from "../components/PasswordGenerator";
 import VaultPanel from "../components/VaultPanel";
 
 type ClientVaultProps = {
@@ -5,7 +6,7 @@ type ClientVaultProps = {
     credentialId: string,
     accountUsername: string,
     accountPassword: string
-  ) => Promise<void>;
+  ) => void | Promise<void>;
 };
 
 export default function ClientVault({ onCloudSave }: ClientVaultProps) {
@@ -16,15 +17,17 @@ export default function ClientVault({ onCloudSave }: ClientVaultProps) {
           <h2 className="dashboard-title">Client-Encrypted Vault</h2>
           <p className="dashboard-subtitle">
             Generate passwords and store secrets locally-encrypted before they
-            ever touch the server.
+            ever touch the server. Optionally sync selected entries to your
+            secure cloud vault.
           </p>
         </div>
       </div>
 
       <div className="client-vault-grid">
-        {/* Removed only the PasswordGenerator card — everything else untouched */}
         <div className="client-vault-card">
-          {/* ✅ Pass AWS save hook into the vault panel */}
+          <PasswordGenerator />
+        </div>
+        <div className="client-vault-card">
           <VaultPanel onCloudSave={onCloudSave} />
         </div>
       </div>
