@@ -1,5 +1,3 @@
-// frontend/src/components/VaultPanel.tsx
-
 import { useEffect, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
@@ -7,6 +5,7 @@ import type { CipherBlob } from "../crypto/crypto";
 const API_BASE = import.meta.env.VITE_API_BASE as string;
 
 type VaultPanelProps = {
+  currentUser: string;
   onCloudSave?: (
     credentialId: string,
     username: string,
@@ -16,7 +15,7 @@ type VaultPanelProps = {
 
 type Row = CipherBlob & { _idx: number };
 
-export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
+export default function VaultPanel({ currentUser, onCloudSave }: VaultPanelProps) {
   const { isReady, encryptAndStore, listItems, decryptItem } = useCrypto();
   const [site, setSite] = useState("");
   const [login, setLogin] = useState("");
@@ -37,7 +36,19 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
     setSelectedMeta(null);
     try {
       const items = await listItems();
-      setRows(items.map((it, i) => ({ ...it, _idx: i })));
+
+      // Only show items that belong to the current user.
+      // Older items without userId will be hidden; new saves will include it.
+      const filtered = items.filter((it) => {
+        const metaUser = (it.meta as any)?.userId as string | undefined;
+        if (!metaUser) {
+          // If you want old shared items to still show for everyone, return true here.
+          return false;
+        }
+        return metaUser === currentUser;
+      });
+
+      setRows(filtered.map((it, i) => ({ ...it, _idx: i })));
     } catch (e: any) {
       setErr(e.message ?? String(e));
     } finally {
@@ -51,6 +62,7 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
     try {
       const meta: Record<string, unknown> = {
         createdAt: new Date().toISOString(),
+        userId: currentUser, // tag with owner so we can filter later
       };
       const siteVal = site.trim();
       const loginVal = login.trim();
@@ -62,14 +74,14 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
         ...meta,
       });
 
-      // NEW: optionally sync to cloud (per-user) without affecting local vault
+      // Optionally sync to cloud (per-user) without affecting local vault
       if (onCloudSave) {
         const credentialId = `${siteVal || "item"}-${Date.now()}`;
         try {
           await onCloudSave(credentialId, loginVal || "", password);
         } catch (e) {
           console.error("Cloud save failed:", e);
-          // intentionally not rethrowing so local UX remains intact
+          // deliberately not rethrowing so local UX remains intact
         }
       }
 
@@ -111,7 +123,8 @@ export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
 
   useEffect(() => {
     if (isReady) void refresh();
-  }, [isReady]);
+    // re-run if the logged-in user changes
+  }, [isReady, currentUser]);
 
   if (!isReady)
     return <div className="muted">Login to derive your vault key…</div>;
