@@ -38,6 +38,7 @@ function App() {
   };
 
   // Called by Login.tsx when password is correct
+  // mfaFromApi = whether the backend says this user already has MFA set up
   const handlePasswordOk = (mfaFromApi: boolean, username: string) => {
     setCurrentUser(username);
     setMfaEnabled(mfaFromApi);
@@ -45,6 +46,7 @@ function App() {
   };
 
   const handleMfaOk = () => {
+    // Once MFA is successfully verified, mark it enabled and go to dashboard
     setMfaEnabled(true);
     setScreen("dashboard");
   };
@@ -105,9 +107,8 @@ function App() {
         <div className="min-h-screen flex items-center justify-center">
           <MFAVerify
             username={currentUser}
-            mfaEnabled={mfaEnabled}
+            enrolled={mfaEnabled}   // <-- key fix: pass enrolled flag correctly
             onMfaOk={handleMfaOk}
-            onCancel={() => setScreen("login")}
           />
         </div>
       )}
@@ -117,6 +118,7 @@ function App() {
           username={currentUser}
           mfaEnabled={mfaEnabled}
           onLogout={handleLogout}
+          // these props are used by your updated Dashboard.tsx
           theme={theme}
           onToggleTheme={toggleTheme}
         />
