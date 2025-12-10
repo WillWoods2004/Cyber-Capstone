@@ -8,15 +8,20 @@ type Row = CipherBlob & { _idx: number };
 
 export default function VaultPanel() {
   const { isReady, encryptAndStore, listItems, decryptItem } = useCrypto();
-  const [secret, setSecret] = useState("");
+  const [site, setSite] = useState("");
+  const [login, setLogin] = useState("");
+  const [password, setPassword] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [decrypted, setDecrypted] = useState<string | null>(null);
+  const [selectedMeta, setSelectedMeta] = useState<{ site?: string; login?: string } | null>(null);
 
   async function refresh() {
     setBusy(true);
     setErr(null);
+    setDecrypted(null);
+    setSelectedMeta(null);
     try {
       const items = await listItems();
       setRows(items.map((it, i) => ({ ...it, _idx: i })));
@@ -31,8 +36,21 @@ export default function VaultPanel() {
     setBusy(true);
     setErr(null);
     try {
-      await encryptAndStore(secret, { createdAt: new Date().toISOString() });
-      setSecret("");
+      const meta: Record<string, unknown> = {
+        createdAt: new Date().toISOString(),
+      };
+      const siteVal = site.trim();
+      const loginVal = login.trim();
+      if (siteVal) meta.site = siteVal;
+      if (loginVal) meta.login = loginVal;
+      await encryptAndStore(password, {
+        ...meta,
+      });
+      setSite("");
+      setLogin("");
+      setPassword("");
+      setDecrypted(null);
+      setSelectedMeta(null);
       await refresh();
     } catch (e: any) {
       setErr(e.message ?? String(e));
@@ -48,7 +66,10 @@ export default function VaultPanel() {
     try {
       const res = await fetch(`${API_BASE}/vault/items/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) throw new Error(`Delete failed: ${res.status}`);
-      if (decrypted) setDecrypted(null);
+      if (decrypted) {
+        setDecrypted(null);
+        setSelectedMeta(null);
+      }
       await refresh();
     } catch (e: any) {
       setErr(e.message ?? String(e));
@@ -68,11 +89,30 @@ export default function VaultPanel() {
       <div className="vault-toolbar">
         <input
           className="vault-input"
-          placeholder="Secret to store (client-encrypted)"
-          value={secret}
-          onChange={(e) => setSecret(e.target.value)}
+          placeholder="Website (e.g., gmail.com)"
+          value={site}
+          onChange={(e) => setSite(e.target.value)}
         />
-        <button className="btn btn-primary" onClick={save} disabled={busy || !secret.trim()}>
+        <input
+          className="vault-input"
+          placeholder="Login / email (e.g., user@gmail.com)"
+          value={login}
+          onChange={(e) => setLogin(e.target.value)}
+        />
+        <input
+          className="vault-input"
+          type="password"
+          placeholder="Password to encrypt"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <button
+          className="btn btn-primary"
+          onClick={save}
+          disabled={
+            busy || !password.trim()
+          }
+        >
           Save
         </button>
         <button className="btn" onClick={refresh} disabled={busy}>
@@ -81,20 +121,24 @@ export default function VaultPanel() {
       </div>
 
       {err && <div className="error">{err}</div>}
+      <div className="muted small" style={{ marginBottom: 8 }}>
+        Password is required. Site/login are optional but recommended so you can recognize the entry.
+      </div>
 
       <div className="vault-table-wrap">
         <table className="vault-table">
           <thead>
             <tr>
               <th style={{ width: 160 }}>ID</th>
-              <th>Meta</th>
+              <th>Site</th>
+              <th>User / Email</th>
               <th style={{ width: 180 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={3} className="muted">
+                <td colSpan={4} className="muted">
                   No items yet.
                 </td>
               </tr>
@@ -102,17 +146,20 @@ export default function VaultPanel() {
               rows.map((r) => (
                 <tr key={r.id ?? r._idx}>
                   <td className="vault-id" title={r.id ?? ""}>
-                    {(r.id ?? "").slice(0, 8) || "—"}
+                    {(r.id ?? "").slice(0, 8) || "-"}
                   </td>
-                  <td className="vault-meta">
-                    <code className="mono small">
-                      {JSON.stringify(r.meta ?? {}, null, 0)}
-                    </code>
-                  </td>
+                  <td className="vault-meta">{(r.meta as any)?.site ?? "-"}</td>
+                  <td className="vault-meta">{(r.meta as any)?.login ?? "-"}</td>
                   <td className="vault-actions">
                     <button
                       className="btn btn-primary"
-                      onClick={async () => setDecrypted(await decryptItem(r))}
+                      onClick={async () => {
+                        setDecrypted(await decryptItem(r));
+                        setSelectedMeta({
+                          site: (r.meta as any)?.site,
+                          login: (r.meta as any)?.login,
+                        });
+                      }}
                       disabled={busy}
                     >
                       Decrypt
@@ -132,18 +179,23 @@ export default function VaultPanel() {
 
       {decrypted !== null && (
         <div className="vault-output">
-          <span className="muted">Decrypted:</span>{" "}
-          <code className="mono">{decrypted}</code>
-          <button
-            className="btn"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(decrypted);
-              } catch {}
-            }}
-          >
-            Copy
-          </button>
+          <div className="muted">
+            {selectedMeta?.site ?? "Item"} — {selectedMeta?.login ?? "login not set"}
+          </div>
+          <div>
+            <span className="muted">Decrypted password:</span>{" "}
+            <code className="mono">{decrypted}</code>
+            <button
+              className="btn"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(decrypted);
+                } catch {}
+              }}
+            >
+              Copy
+            </button>
+          </div>
         </div>
       )}
     </div>
