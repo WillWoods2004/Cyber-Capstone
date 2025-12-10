@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
 
@@ -6,7 +6,16 @@ const API_BASE = import.meta.env.VITE_API_BASE as string;
 
 type Row = CipherBlob & { _idx: number };
 
-export default function VaultPanel() {
+type VaultPanelProps = {
+  // OPTIONAL: if provided, will be called after a local save to sync to AWS
+  onCloudSave?: (
+    credentialId: string,
+    accountUsername: string,
+    accountPassword: string
+  ) => Promise<void>;
+};
+
+export default function VaultPanel({ onCloudSave }: VaultPanelProps) {
   const { isReady, encryptAndStore, listItems, decryptItem } = useCrypto();
   const [site, setSite] = useState("");
   const [login, setLogin] = useState("");
@@ -43,9 +52,21 @@ export default function VaultPanel() {
       const loginVal = login.trim();
       if (siteVal) meta.site = siteVal;
       if (loginVal) meta.login = loginVal;
+
+      // 🔐 1. Client-side encrypt & store (existing behavior)
       await encryptAndStore(password, {
         ...meta,
       });
+
+      // ☁️ 2. OPTIONAL: sync to cloud backend (AWS) if handler provided
+      if (onCloudSave) {
+        // Use site as the credentialId; fall back to a generic label if blank
+        const credentialId = siteVal || "Unnamed Site";
+        const accountUsername = loginVal || "Unknown User";
+        await onCloudSave(credentialId, accountUsername, password);
+      }
+
+      // 3. Reset local form + refresh view (existing behavior)
       setSite("");
       setLogin("");
       setPassword("");
@@ -109,9 +130,7 @@ export default function VaultPanel() {
         <button
           className="btn btn-primary"
           onClick={save}
-          disabled={
-            busy || !password.trim()
-          }
+          disabled={busy || !password.trim()}
         >
           Save
         </button>
@@ -122,7 +141,8 @@ export default function VaultPanel() {
 
       {err && <div className="error">{err}</div>}
       <div className="muted small" style={{ marginBottom: 8 }}>
-        Password is required. Site/login are optional but recommended so you can recognize the entry.
+        Password is required. Site/login are optional but recommended so you can
+        recognize the entry.
       </div>
 
       <div className="vault-table-wrap">
@@ -165,7 +185,11 @@ export default function VaultPanel() {
                       Decrypt
                     </button>
                     {r.id && (
-                      <button className="btn btn-danger" onClick={() => remove(r.id)} disabled={busy}>
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => remove(r.id)}
+                        disabled={busy}
+                      >
                         Delete
                       </button>
                     )}
