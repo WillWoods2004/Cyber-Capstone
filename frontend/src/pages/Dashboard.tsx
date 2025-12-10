@@ -1,3 +1,5 @@
+// frontend/src/pages/Dashboard.tsx
+
 import { useState } from "react";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
@@ -149,17 +151,29 @@ export default function Dashboard({
                 Configure your account preferences
               </p>
 
-              <div className="theme-toggle-container">
-                <button className="theme-toggle" onClick={onToggleTheme}>
-                  {themeLabel}
-                </button>
-              </div>
+              <div className="settings-layout">
+                <div className="settings-card">
+                  <h3 className="settings-section-title">Appearance</h3>
+                  <p className="settings-section-subtitle">
+                    Switch between light and dark themes.
+                  </p>
+                  <button className="theme-toggle" onClick={onToggleTheme}>
+                    {themeLabel}
+                  </button>
+                </div>
 
-              {onLogout && (
-                <button className="logout-btn" onClick={onLogout}>
-                  Logout
-                </button>
-              )}
+                <div className="settings-card">
+                  <h3 className="settings-section-title">Account</h3>
+                  <p className="settings-section-subtitle">
+                    Sign out of your SecureVault session.
+                  </p>
+                  {onLogout && (
+                    <button className="logout-btn" onClick={onLogout}>
+                      Logout
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
