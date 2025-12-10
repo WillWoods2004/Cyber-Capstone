@@ -1,5 +1,3 @@
-// frontend/src/pages/Dashboard.tsx
-
 import { useState } from "react";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
@@ -123,7 +121,10 @@ export default function Dashboard({
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              <ClientVault onCloudSave={handleCloudSave} />
+              <ClientVault
+                currentUser={username}
+                onCloudSave={handleCloudSave}
+              />
             </div>
           )}
 
