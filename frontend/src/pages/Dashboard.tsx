@@ -41,7 +41,7 @@ export default function Dashboard({
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
-  // This is where we tie a credential to the current SecurityPass user.
+  // This ties each credential to the current SecurityPass user.
   const handleCloudSave = async (
     credentialId: string,
     siteUsername: string,
@@ -49,7 +49,7 @@ export default function Dashboard({
   ) => {
     try {
       const ok = await saveCredentialToCloud(
-        username,       // userId in SecurityPassCredentials
+        username, // userId in SecurityPassCredentials = logged-in SecurityPassUsers.username
         credentialId,
         siteUsername,
         sitePassword
