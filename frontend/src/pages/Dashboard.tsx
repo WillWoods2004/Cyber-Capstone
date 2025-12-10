@@ -9,6 +9,9 @@ import QuickActions from "../components/QuickActions";
 import PasswordGenerator from "../components/PasswordGenerator";
 import ClientVault from "./ClientVault";
 
+// ✅ NEW: import your AWS helper
+import { saveCredentialToCloud } from "../api/saveCredential";
+
 type DashboardProps = {
   username: string;
   mfaEnabled: boolean;
@@ -37,6 +40,29 @@ export default function Dashboard({
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
+  // ✅ NEW: handler that the vault can call to save to AWS
+  // You can decide what you want to use as `credentialId` (e.g. site name or UUID)
+  const handleCloudSave = async (
+    credentialId: string,
+    accountUsername: string,
+    accountPassword: string
+  ) => {
+    try {
+      const ok = await saveCredentialToCloud(
+        username,        // userId in DynamoDB
+        credentialId,    // e.g. site/app name
+        accountUsername,
+        accountPassword
+      );
+
+      if (!ok) {
+        console.error("Failed to save credential to cloud");
+      }
+    } catch (err) {
+      console.error("Error calling saveCredentialToCloud:", err);
+    }
+  };
+
   return (
     <div className="dashboard-container">
       <Sidebar
@@ -49,7 +75,7 @@ export default function Dashboard({
 
       <div className="dashboard-main">
         <TopBar
-          // instead of alert, go to the Client-Encrypted Vault view
+          // unchanged: Add Password still opens the client-side vault view
           onAddPassword={() => setActiveView("clientVault")}
           onGeneratePassword={() => setActiveView("generator")}
         />
@@ -99,7 +125,8 @@ export default function Dashboard({
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              <ClientVault />
+              {/* ✅ Pass the cloud-save handler into your vault */}
+              <ClientVault onCloudSave={handleCloudSave} />
             </div>
           )}
 
@@ -125,29 +152,18 @@ export default function Dashboard({
                 Configure your account preferences
               </p>
 
-              {/* Appearance section */}
-              <div className="settings-section">
-                <h3 className="settings-section-title">Appearance</h3>
-                <p className="settings-section-text">
-                  Switch between light and dark mode for this device.
-                </p>
+              {/* Theme toggle inside Settings */}
+              <div className="theme-toggle-container">
                 <button className="theme-toggle" onClick={onToggleTheme}>
                   {themeLabel}
                 </button>
               </div>
 
-              {/* Account section */}
-              <div className="settings-section">
-                <h3 className="settings-section-title">Account</h3>
-                <p className="settings-section-text">
-                  Sign out of SecureVault on this browser.
-                </p>
-                {onLogout && (
-                  <button className="logout-btn" onClick={onLogout}>
-                    Logout
-                  </button>
-                )}
-              </div>
+              {onLogout && (
+                <button className="logout-btn" onClick={onLogout}>
+                  Logout
+                </button>
+              )}
             </div>
           )}
         </div>
