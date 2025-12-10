@@ -1,3 +1,5 @@
+// frontend/src/api/saveCredential.ts
+
 const API_BASE =
   "https://5y6lvgdx08.execute-api.us-east-1.amazonaws.com/prod";
 
@@ -26,7 +28,8 @@ export async function saveCredentialToCloud(
       return false;
     }
 
-    const data = await response.json().catch(() => ({}));
+    const data = await response.json().catch(() => ({} as any));
+
     if (!data.success) {
       console.error("Cloud save returned success=false", data);
       return false;
