@@ -681,7 +681,7 @@
   background-color: var(--accent-hover);
 }
 
-/* Generator Page */
+/* Generator / Other Pages */
 .generator-page,
 .passwords-page,
 .security-page,
@@ -710,4 +710,61 @@
 
 .logout-btn:hover {
   background-color: #dc2626;
+}
+
+/* ===== Settings layout (NEW) ===== */
+
+.settings-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.settings-card {
+  flex: 1 1 260px;
+  max-width: 360px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.settings-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-main);
+}
+
+.settings-section-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Theme toggle button on settings card */
+.theme-toggle {
+  margin-top: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  background-color: var(--input-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-main);
+  align-self: flex-start;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent);
+}
+
+/* Make the logout button align nicely in its card */
+.settings-card .logout-btn {
+  margin-top: 0.75rem;
+  align-self: flex-start;
 }
