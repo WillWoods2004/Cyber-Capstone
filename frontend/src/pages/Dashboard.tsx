@@ -49,7 +49,8 @@ export default function Dashboard({
 
       <div className="dashboard-main">
         <TopBar
-          onAddPassword={() => alert("Add password functionality")}
+          // CHANGE: instead of alert, go to the Client-Encrypted Vault view
+          onAddPassword={() => setActiveView("clientVault")}
           onGeneratePassword={() => setActiveView("generator")}
         />
 
@@ -106,7 +107,7 @@ export default function Dashboard({
             <div className="passwords-page">
               <h2 className="dashboard-title">All Passwords</h2>
               <p className="dashboard-subtitle">Manage your stored passwords</p>
-              {/* Add your password vault component here */}
+              {/* Add your password vault component here if you build a second view */}
             </div>
           )}
 
