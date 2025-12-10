@@ -49,7 +49,7 @@ export default function Dashboard({
 
       <div className="dashboard-main">
         <TopBar
-          // CHANGE: instead of alert, go to the Client-Encrypted Vault view
+          // instead of alert, go to the Client-Encrypted Vault view
           onAddPassword={() => setActiveView("clientVault")}
           onGeneratePassword={() => setActiveView("generator")}
         />
@@ -125,18 +125,29 @@ export default function Dashboard({
                 Configure your account preferences
               </p>
 
-              {/* Theme toggle inside Settings */}
-              <div className="theme-toggle-container">
+              {/* Appearance section */}
+              <div className="settings-section">
+                <h3 className="settings-section-title">Appearance</h3>
+                <p className="settings-section-text">
+                  Switch between light and dark mode for this device.
+                </p>
                 <button className="theme-toggle" onClick={onToggleTheme}>
                   {themeLabel}
                 </button>
               </div>
 
-              {onLogout && (
-                <button className="logout-btn" onClick={onLogout}>
-                  Logout
-                </button>
-              )}
+              {/* Account section */}
+              <div className="settings-section">
+                <h3 className="settings-section-title">Account</h3>
+                <p className="settings-section-text">
+                  Sign out of SecureVault on this browser.
+                </p>
+                {onLogout && (
+                  <button className="logout-btn" onClick={onLogout}>
+                    Logout
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
