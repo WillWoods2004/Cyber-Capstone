@@ -1,6 +1,16 @@
+// frontend/src/api/saveCredential.ts
+
 const API_BASE =
   "https://5y6lvgdx08.execute-api.us-east-1.amazonaws.com/prod";
 
+/**
+ * Save a credential to the SecurityPassCredentials table in DynamoDB.
+ *
+ * @param userId        The logged-in SecurityPass username (partition key).
+ * @param credentialId  A unique id per credential (e.g., site + timestamp).
+ * @param username      The username/email for that site.
+ * @param password      The password for that site.
+ */
 export async function saveCredentialToCloud(
   userId: string,
   credentialId: string,
@@ -26,7 +36,10 @@ export async function saveCredentialToCloud(
       return false;
     }
 
-    const data = await response.json().catch(() => ({} as any));
+    const data = (await response.json().catch(() => ({}))) as {
+      success?: boolean;
+      message?: string;
+    };
 
     if (!data.success) {
       console.error("Cloud save returned success=false", data);
