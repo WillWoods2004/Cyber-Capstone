@@ -1,3 +1,5 @@
+// frontend/src/pages/Dashboard.tsx
+
 import { useState } from "react";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
@@ -39,18 +41,18 @@ export default function Dashboard({
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
-  // Cloud save handler wired into the client vault
+  // This is where we tie a credential to the current SecurityPass user.
   const handleCloudSave = async (
     credentialId: string,
-    accountUsername: string,
-    accountPassword: string
+    siteUsername: string,
+    sitePassword: string
   ) => {
     try {
       const ok = await saveCredentialToCloud(
-        username, // userId in DynamoDB
+        username,       // userId in SecurityPassCredentials
         credentialId,
-        accountUsername,
-        accountPassword
+        siteUsername,
+        sitePassword
       );
 
       if (!ok) {
