@@ -13,6 +13,8 @@ type DashboardProps = {
   username: string;
   mfaEnabled: boolean;
   onLogout?: () => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 };
 
 type ActiveView =
@@ -23,9 +25,17 @@ type ActiveView =
   | "security"
   | "settings";
 
-export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardProps) {
+export default function Dashboard({
+  username,
+  mfaEnabled,
+  onLogout,
+  theme,
+  onToggleTheme,
+}: DashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
+
+  const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
   return (
     <div className="dashboard-container">
@@ -69,7 +79,9 @@ export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardP
                   <SecurityOverview />
                 </div>
                 <div className="grid-col-1">
-                  <QuickActions onGeneratePassword={() => setActiveView("generator")} />
+                  <QuickActions
+                    onGeneratePassword={() => setActiveView("generator")}
+                  />
                 </div>
               </div>
             </>
@@ -108,7 +120,17 @@ export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardP
           {activeView === "settings" && (
             <div className="settings-page">
               <h2 className="dashboard-title">Settings</h2>
-              <p className="dashboard-subtitle">Configure your account preferences</p>
+              <p className="dashboard-subtitle">
+                Configure your account preferences
+              </p>
+
+              {/* Theme toggle inside Settings */}
+              <div className="theme-toggle-container">
+                <button className="theme-toggle" onClick={onToggleTheme}>
+                  {themeLabel}
+                </button>
+              </div>
+
               {onLogout && (
                 <button className="logout-btn" onClick={onLogout}>
                   Logout
