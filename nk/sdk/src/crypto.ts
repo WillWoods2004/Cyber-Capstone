@@ -23,10 +23,7 @@ export type CipherItem = {
 
 const subtle = wc.subtle;
 
-/**
- * Derive a 256-bit master key from a password using Argon2id.
- * Why: resistant to GPU cracking and side-channels; standard choice for secrets.
- */
+
 export async function deriveMasterKey(
   password: string,
   params: DeriveParams = {}
@@ -44,10 +41,6 @@ export async function deriveMasterKey(
   return { key: new Uint8Array(key), salt };
 }
 
-/**
- * Encrypt a plaintext entry with AES-256-GCM.
- * Returns separate ct and tag so they’re explicit in the API contract.
- */
 export async function encryptEntry(
   keyBytes: Uint8Array,
   plaintext: Uint8Array,
