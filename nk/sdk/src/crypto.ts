@@ -1,11 +1,3 @@
-// nk/sdk/src/crypto.ts
-/**
- * Client-side vault crypto:
- * - KDF: Argon2id via libsodium (crypto_pwhash)
- * - AEAD: AES-256-GCM via Node WebCrypto
- * - Zero-knowledge: server never sees keys/plaintext
- */
-
 import sodium from "libsodium-wrappers-sumo"; // IMPORTANT: default import
 import { randomBytes, webcrypto as wc } from "crypto";
 
