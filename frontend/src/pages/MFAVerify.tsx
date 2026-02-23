@@ -1,14 +1,10 @@
-// Front-End/frontend/src/pages/MFAVerify.tsx
-
 import { useEffect, useState } from "react";
 import { ErrorBox } from "../components/Error";
-
-const API_BASE =
-  "https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod";
+import { AUTH_API_BASE } from "../config/api";
 
 interface Props {
   username: string;
-  enrolled: boolean; // from backend login (mfaEnabled)
+  enrolled: boolean;
   onMfaOk: () => void;
 }
 
@@ -23,7 +19,6 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
   const [qrUrl, setQrUrl] = useState<string>("");
   const [secret, setSecret] = useState<string>("");
 
-  // First-time setup: ask backend for secret + otpauth URL
   useEffect(() => {
     const startSetup = async () => {
       if (mode !== "setup") return;
@@ -32,7 +27,7 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
       setLoading(true);
 
       try {
-        const response = await fetch(`${API_BASE}/mfa/setup`, {
+        const response = await fetch(`${AUTH_API_BASE}/mfa/setup`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -43,24 +38,18 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
         const data: any = await response.json().catch(() => ({}));
 
         if (!response.ok || !data.success) {
-          setError(
-            data.message ||
-              "Failed to start MFA setup. Please try again or contact support."
-          );
+          setError(data.message || "Failed to start MFA setup. Please try again or contact support.");
           return;
         }
 
-        const otpAuthUrl: string =
-          data.otpAuthUrl || data.otpauthUrl || "";
+        const otpAuthUrl: string = data.otpAuthUrl || data.otpauthUrl || "";
 
         const secretBase32: string = data.secret || "";
         setSecret(secretBase32);
 
         if (otpAuthUrl) {
-          // Use a simple public QR service for dev
           const url =
-            "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" +
-            encodeURIComponent(otpAuthUrl);
+            "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(otpAuthUrl);
           setQrUrl(url);
         }
       } catch (err) {
@@ -86,7 +75,7 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
     try {
       setLoading(true);
 
-      const response = await fetch(`${API_BASE}/mfa/verify`, {
+      const response = await fetch(`${AUTH_API_BASE}/mfa/verify`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -97,13 +86,10 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
       const data: any = await response.json().catch(() => ({}));
 
       if (!response.ok || !data.success) {
-        setError(
-          data.message || "Invalid MFA code. Please try again."
-        );
+        setError(data.message || "Invalid MFA code. Please try again.");
         return;
       }
 
-      // Verified – proceed to dashboard
       onMfaOk();
     } catch (err) {
       console.error("MFA verify network error:", err);
@@ -119,9 +105,7 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
     <div className="card-wrapper">
       <div className="auth-card">
         <h2 className="auth-overline">SECURITYPASS</h2>
-        <h1 className="auth-title">
-          {isSetup ? "Set up MFA" : "Enter MFA Code"}
-        </h1>
+        <h1 className="auth-title">{isSetup ? "Set up MFA" : "Enter MFA Code"}</h1>
         <p className="auth-subtitle">
           {isSetup
             ? "Scan the QR code in Microsoft Authenticator, then enter the 6-digit code."
@@ -145,8 +129,7 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
                 />
                 {secret && (
                   <p className="helper-text">
-                    If you can&apos;t scan the QR, manually enter this key in
-                    your Authenticator app:{" "}
+                    If you can&apos;t scan the QR, manually enter this key in your Authenticator app:{" "}
                     <strong>{secret}</strong>
                   </p>
                 )}
@@ -154,7 +137,7 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
             ) : (
               <p className="helper-text">
                 {loading
-                  ? "Preparing your MFA setup…"
+                  ? "Preparing your MFA setup..."
                   : "Unable to load QR code. You can still use the manual key below."}
               </p>
             )}
@@ -174,11 +157,7 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="primary-btn"
-          >
+          <button type="submit" disabled={loading} className="primary-btn">
             {loading ? "Verifying..." : "Verify"}
           </button>
         </form>
@@ -186,3 +165,4 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
     </div>
   );
 }
+
