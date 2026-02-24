@@ -1,12 +1,9 @@
-// Front-End/frontend/src/pages/Login.tsx
-
 import { useState } from "react";
 import { ErrorBox } from "../components/Error";
 import { useCrypto } from "../crypto/CryptoProvider";
+import { AUTH_API_BASE } from "../config/api";
 
 const MAX_ATTEMPTS = 3;
-const API_BASE =
-  "https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod";
 
 interface Props {
   onPasswordOk: (mfaFromApi: boolean, username: string) => void;
@@ -25,14 +22,12 @@ export default function Login({
   const [attempts, setAttempts] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Caps Lock warning
   const [capsOn, setCapsOn] = useState(false);
   const handlePasswordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const isCaps = e.getModifierState && e.getModifierState("CapsLock");
     setCapsOn(isCaps);
   };
 
-  // Crypto: derive key on success
   const { setMasterPassword } = useCrypto();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,7 +42,7 @@ export default function Login({
     try {
       setLoading(true);
 
-      const response = await fetch(`${API_BASE}/login`, {
+      const response = await fetch(`${AUTH_API_BASE}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -56,20 +51,15 @@ export default function Login({
       const data: any = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const serverMessage =
-          (data && (data.message || data.error)) ?? undefined;
+        const serverMessage = (data && (data.message || data.error)) ?? undefined;
 
-        setError(
-          serverMessage ||
-            `Server error (${response.status}). Please try again.`
-        );
+        setError(serverMessage || `Server error (${response.status}). Please try again.`);
         return;
       }
 
       if (data.success) {
-        // Derive client-side vault key (Argon2id) before moving on
         await setMasterPassword(username, password);
-        setPassword(""); // reduce exposure
+        setPassword("");
 
         const mfaFromApi = Boolean(data.mfaEnabled);
         onPasswordOk(mfaFromApi, username);
@@ -80,9 +70,7 @@ export default function Login({
         if (nextAttempts >= MAX_ATTEMPTS) {
           setError("Password attempt limit reached.");
         } else {
-          setError(
-            data.message || "Wrong username or password. Please try again."
-          );
+          setError(data.message || "Wrong username or password. Please try again.");
         }
       }
     } catch (err) {
@@ -98,9 +86,7 @@ export default function Login({
       <div className="auth-card">
         <h2 className="auth-overline">SecurityPass</h2>
         <h1 className="auth-title">Sign in</h1>
-        <p className="auth-subtitle">
-          Use your account to access the password manager.
-        </p>
+        <p className="auth-subtitle">Use your account to access the password manager.</p>
 
         <ErrorBox message={error} />
 
@@ -120,24 +106,16 @@ export default function Login({
             <label>Password</label>
             <input
               type="password"
-              placeholder="••••••••"
+              placeholder="********"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
               onKeyDown={handlePasswordKeyDown}
             />
-            {capsOn && (
-              <p className="caps-warning">
-                ⚠ Caps Lock is ON. Your password may be entered incorrectly.
-              </p>
-            )}
+            {capsOn && <p className="caps-warning">Caps Lock is ON. Your password may be entered incorrectly.</p>}
           </div>
 
-          <button
-            type="submit"
-            disabled={attempts >= MAX_ATTEMPTS || loading}
-            className="primary-btn"
-          >
+          <button type="submit" disabled={attempts >= MAX_ATTEMPTS || loading} className="primary-btn">
             {loading ? "Logging in..." : "Log in"}
           </button>
 
@@ -164,3 +142,4 @@ export default function Login({
     </div>
   );
 }
+

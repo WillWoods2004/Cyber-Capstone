@@ -371,6 +371,302 @@
   padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,0.03);
 }
 
+.crypto-visualizer {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--input-bg);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.crypto-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.crypto-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crypto-title {
+  font-weight: 700;
+}
+
+.crypto-payload-btn {
+  font-size: 0.78rem;
+  padding: 6px 10px;
+}
+
+.crypto-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+}
+
+.crypto-status-idle {
+  color: var(--text-muted);
+}
+
+.crypto-status-encrypting,
+.crypto-status-storing,
+.crypto-status-decrypting {
+  color: #f59e0b;
+}
+
+.crypto-status-encrypted,
+.crypto-status-stored,
+.crypto-status-decrypted {
+  color: #22c55e;
+}
+
+.crypto-status-error {
+  color: #ff6b6b;
+}
+
+.crypto-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: cryptoPulse 1s ease-in-out infinite;
+}
+
+@keyframes cryptoPulse {
+  0% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.35); }
+  100% { opacity: 0.3; transform: scale(1); }
+}
+
+.crypto-grid-view {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 980px) {
+  .crypto-grid-view {
+    grid-template-columns: 1fr;
+  }
+}
+
+.crypto-block {
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  min-height: 74px;
+}
+
+.crypto-block-wide {
+  grid-column: 1 / -1;
+}
+
+.crypto-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  opacity: 0.8;
+  margin-bottom: 6px;
+}
+
+.crypto-value {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.crypto-log-box {
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.crypto-log-lines {
+  display: grid;
+  gap: 4px;
+  max-height: 140px;
+  overflow: auto;
+}
+
+.crypto-log-line {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
+.crypto-timeline {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .crypto-timeline {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+.crypto-step {
+  position: relative;
+  padding-right: 10px;
+}
+
+.crypto-step-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.crypto-step-label {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.crypto-step-line {
+  position: absolute;
+  top: 12px;
+  left: 30px;
+  right: 4px;
+  height: 2px;
+  background: var(--border-subtle);
+}
+
+@media (max-width: 980px) {
+  .crypto-step-line {
+    display: none;
+  }
+}
+
+.crypto-step-active .crypto-step-dot {
+  border-color: #4f7cff;
+  color: #4f7cff;
+}
+
+.crypto-step-current .crypto-step-dot {
+  background: #4f7cff;
+  color: #fff;
+}
+
+.crypto-step-line-active {
+  background: #4f7cff;
+}
+
+.crypto-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 1200px) {
+  .crypto-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .crypto-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.crypto-stat-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.crypto-stat-card-wide {
+  grid-column: 1 / -1;
+}
+
+.crypto-stat-label {
+  font-size: 0.72rem;
+  opacity: 0.8;
+  margin-bottom: 2px;
+}
+
+.crypto-stat-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.crypto-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  padding: 12px;
+}
+
+.crypto-modal {
+  width: min(980px, 96vw);
+  max-height: 88vh;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+}
+
+.crypto-modal-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.crypto-modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.crypto-modal-body {
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  background: var(--input-bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.crypto-modal-actions {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
 .small { font-size: 0.85rem; }
 .muted { opacity: 0.75; }

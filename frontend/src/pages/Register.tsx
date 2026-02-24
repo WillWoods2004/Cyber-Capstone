@@ -1,10 +1,6 @@
-// Front-End/frontend/src/pages/Register.tsx
-
 import { useState } from "react";
 import { ErrorBox } from "../components/Error";
-
-const API_BASE =
-  "https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod";
+import { AUTH_API_BASE } from "../config/api";
 
 interface Props {
   onRegistered: (username: string) => void;
@@ -40,7 +36,7 @@ export default function Register({ onRegistered, onCancel }: Props) {
     try {
       setLoading(true);
 
-      const response = await fetch(`${API_BASE}/register`, {
+      const response = await fetch(`${AUTH_API_BASE}/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -51,14 +47,10 @@ export default function Register({ onRegistered, onCancel }: Props) {
       const data: any = await response.json().catch(() => ({}));
 
       if (!response.ok || !data.success) {
-        setError(
-          data.message ||
-            `Registration failed (status ${response.status}). Please try again.`
-        );
+        setError(data.message || `Registration failed (status ${response.status}). Please try again.`);
         return;
       }
 
-      // Registration successful – hand username back to App so we can prefill login
       onRegistered(username);
     } catch (err) {
       console.error("Registration network error:", err);
@@ -73,9 +65,7 @@ export default function Register({ onRegistered, onCancel }: Props) {
       <div className="auth-card">
         <h2 className="auth-overline">SecurityPass</h2>
         <h1 className="auth-title">Create your account</h1>
-        <p className="auth-subtitle">
-          Set up a SecurityPass account to store your passwords securely.
-        </p>
+        <p className="auth-subtitle">Set up a SecurityPass account to store your passwords securely.</p>
 
         <ErrorBox message={error} />
 
@@ -113,11 +103,7 @@ export default function Register({ onRegistered, onCancel }: Props) {
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="primary-btn"
-          >
+          <button type="submit" disabled={loading} className="primary-btn">
             {loading ? "Creating account..." : "Create account"}
           </button>
 
@@ -144,3 +130,4 @@ export default function Register({ onRegistered, onCancel }: Props) {
     </div>
   );
 }
+
