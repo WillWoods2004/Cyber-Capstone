@@ -12,6 +12,15 @@ type VaultPanelProps = {
   ) => void | Promise<void>;
 };
 
+type VaultPanelProps = {
+  currentUser: string;
+  onCloudSave?: (
+    credentialId: string,
+    username: string,
+    password: string
+  ) => void | Promise<void>;
+};
+
 type Row = CipherBlob & { _idx: number };
 
 type CryptoStage =
@@ -112,7 +121,10 @@ export default function VaultPanel({ currentUser, onCloudSave }: VaultPanelProps
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [decrypted, setDecrypted] = useState<string | null>(null);
-  const [selectedMeta, setSelectedMeta] = useState<{ site?: string; login?: string } | null>(null);
+  const [selectedMeta, setSelectedMeta] = useState<{
+    site?: string;
+    login?: string;
+  } | null>(null);
 
   const [cryptoStage, setCryptoStage] = useState<CryptoStage>("idle");
   const [visualPlaintext, setVisualPlaintext] = useState<string | null>(null);
@@ -359,7 +371,8 @@ export default function VaultPanel({ currentUser, onCloudSave }: VaultPanelProps
 
       {err && <div className="error">{err}</div>}
       <div className="muted small" style={{ marginBottom: 8 }}>
-        Password is required. Site/login are optional but recommended so you can recognize the entry.
+        Password is required. Site/login are optional but recommended so you can
+        recognize the entry.
       </div>
 
       <div className="crypto-visualizer">
@@ -490,13 +503,19 @@ export default function VaultPanel({ currentUser, onCloudSave }: VaultPanelProps
                     {(r.id ?? "").slice(0, 8) || "-"}
                   </td>
                   <td className="vault-meta">{(r.meta as any)?.site ?? "-"}</td>
-                  <td className="vault-meta">{(r.meta as any)?.login ?? "-"}</td>
+                  <td className="vault-meta">
+                    {(r.meta as any)?.login ?? "-"}
+                  </td>
                   <td className="vault-actions">
                     <button className="btn btn-primary" onClick={() => void handleDecrypt(r)} disabled={busy}>
                       Decrypt
                     </button>
                     {r.id && (
-                      <button className="btn btn-danger" onClick={() => remove(r.id)} disabled={busy}>
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => remove(r.id)}
+                        disabled={busy}
+                      >
                         Delete
                       </button>
                     )}
@@ -521,7 +540,9 @@ export default function VaultPanel({ currentUser, onCloudSave }: VaultPanelProps
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(decrypted);
-                } catch {}
+                } catch {
+                  // ignore clipboard failures
+                }
               }}
             >
               Copy
