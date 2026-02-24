@@ -12,15 +12,6 @@ type VaultPanelProps = {
   ) => void | Promise<void>;
 };
 
-type VaultPanelProps = {
-  currentUser: string;
-  onCloudSave?: (
-    credentialId: string,
-    username: string,
-    password: string
-  ) => void | Promise<void>;
-};
-
 type Row = CipherBlob & { _idx: number };
 
 type CryptoStage =
