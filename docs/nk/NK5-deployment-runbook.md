@@ -4,35 +4,64 @@
 Deploy frontend + backend to public HTTPS with repeatable steps.
 
 ## Target Architecture
-- Frontend: hosted web app (`app.<domain>`)
-- Backend: API Gateway + Lambda + DynamoDB (`api.<domain>`)
-- TLS: ACM certificate on custom domains
+- Frontend: AWS Amplify Hosting (default domain first, custom domain optional)
+- Backend: API Gateway + Lambda + DynamoDB
+- TLS: HTTPS on Amplify/API Gateway invoke URL; ACM only required for custom domains
 
 ## Pre-Deployment Inputs
-- Domain purchased and DNS hosted.
 - AWS account with permissions for API Gateway, Lambda, DynamoDB, IAM, ACM, CloudWatch.
-- Environment variables for frontend:
-  - `VITE_AUTH_API_BASE=https://api.<domain>`
-  - `VITE_VAULT_API_BASE=https://api.<domain>`
+- Frontend build config committed at repo root: `amplify.yml` (monorepo app root = `frontend`)
+- Frontend environment variables:
+  - `VITE_AUTH_API_BASE=https://<api-id>.execute-api.<region>.amazonaws.com/prod`
+  - `VITE_VAULT_API_BASE=https://<api-id>.execute-api.<region>.amazonaws.com/prod`
+- If custom domains are unavailable in account, continue with Amplify default domain + API invoke URL.
 
-## Steps
-1. Deploy/update Lambda functions and API routes.
-2. Validate API stage endpoints (`/login`, `/mfa/*`, `/vault/items*`).
-3. Request ACM certificate for `api.<domain>` and validate DNS.
-4. Create API Gateway custom domain and map to `prod` stage.
-5. Point DNS record `api.<domain>` to API Gateway domain target.
-6. Deploy frontend to hosting provider and map `app.<domain>`.
-7. Update backend CORS to allow `https://app.<domain>`.
-8. Run smoke test from phone and laptop.
+## Deployment Steps (Default-Domain First)
+1. Verify API Gateway stage exposes all required routes:
+   - `POST /register`
+   - `POST /login`
+   - `POST /mfa/setup`
+   - `POST /mfa/verify`
+   - `GET /vault/items`
+   - `POST /vault/items`
+   - `DELETE /vault/items/{id}`
+2. Enable API Gateway CORS for all routes above and include:
+   - Allowed origins: `https://<amplify-app-domain>`
+   - Allowed methods: `GET,POST,DELETE,OPTIONS`
+   - Allowed headers: `content-type,authorization`
+3. Deploy frontend on Amplify:
+   - Connect repo + branch
+   - Confirm Amplify detects `amplify.yml`
+   - Set environment variables:
+     - `VITE_AUTH_API_BASE=https://<api-id>.execute-api.<region>.amazonaws.com/prod`
+     - `VITE_VAULT_API_BASE=https://<api-id>.execute-api.<region>.amazonaws.com/prod`
+   - Trigger deploy
+4. Run endpoint validation from repo root:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\ops\check-endpoints.ps1 `
+     -VaultApiBase "https://<api-id>.execute-api.<region>.amazonaws.com/prod" `
+     -AuthApiBase "https://<api-id>.execute-api.<region>.amazonaws.com/prod" `
+     -CheckAuthRoutes `
+     -Origin "https://<amplify-app-domain>"
+   ```
+5. Smoke test from laptop and phone on Amplify URL:
+   - Register -> Login -> MFA -> Vault Save -> Refresh -> Decrypt -> Delete
+
+## Optional Custom-Domain Path
+Use only if Route 53/domain features are available in account:
+1. Request ACM certificate for `api.<domain>` and/or `app.<domain>`.
+2. Create API Gateway custom domain and map to `prod`.
+3. Point DNS records to API Gateway and Amplify targets.
+4. Update CORS allowed origins to custom app domain.
 
 ## Rollback
 - Revert frontend deployment to previous release.
-- Re-point API custom domain mapping to previous stage.
+- Re-point API custom domain mapping (if used) to previous stage.
 - Disable problematic Lambda alias/version.
 
 ## Evidence Checklist
-- API custom domain mapping screenshot
-- ACM certificate screenshot
-- DNS record screenshot
-- Frontend custom domain screenshot
+- Amplify successful deploy screenshot (app URL visible)
+- API Gateway routes screenshot showing auth + vault CRUD
+- CORS configuration screenshot for API routes
+- Endpoint checker output screenshot (`check-endpoints.ps1`)
 - End-to-end demo screenshots on two devices

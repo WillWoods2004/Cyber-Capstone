@@ -23,6 +23,14 @@ Expected log: `Mock API listening on http://localhost:8080`
 ## 2) Configure frontend API bases (terminal 2)
 From `frontend`, create `.env.local`.
 
+Full local mode (auth + vault on localhost):
+```powershell
+cd .\frontend
+@'
+VITE_API_BASE=http://localhost:8080
+'@ | Set-Content .\.env.local -Encoding UTF8
+```
+
 Unified base for auth + vault:
 ```powershell
 cd .\frontend
@@ -52,6 +60,7 @@ Open the Vite URL (usually `http://localhost:5173`).
 - Login -> MFA -> Client Vault
 - Save `site` + `login/email` + `password`
 - Refresh -> Decrypt -> Copy
+- In full local mode, use Register first, then MFA verify with code `123456` (or value from `MOCK_MFA_CODE` env var in `nk/api`).
 
 ## Optional CLI checks
 ```powershell
@@ -67,3 +76,21 @@ node .\scripts\decrypt-latest.mjs
 - Evidence pack index: `docs/nk/README.md`
 - CI/security workflow: `.github/workflows/ci-security.yml`
 - Ops helper scripts: `scripts/ops/collect-npm-audit.ps1`, `scripts/ops/check-endpoints.ps1`
+
+## Cloud deploy (Amplify default domain)
+1. In Amplify, deploy this repo branch and keep repo-root build config from `amplify.yml`.
+2. Set Amplify env vars:
+   - `VITE_AUTH_API_BASE=https://<api-id>.execute-api.<region>.amazonaws.com/prod`
+   - `VITE_VAULT_API_BASE=https://<api-id>.execute-api.<region>.amazonaws.com/prod`
+3. Ensure API Gateway includes auth + vault routes and CORS allows your Amplify URL.
+
+Endpoint + CORS verification:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\ops\check-endpoints.ps1 `
+  -VaultApiBase "https://<api-id>.execute-api.<region>.amazonaws.com/prod" `
+  -AuthApiBase "https://<api-id>.execute-api.<region>.amazonaws.com/prod" `
+  -CheckAuthRoutes `
+  -Origin "https://<amplify-app-domain>"
+```
+
+Add `-CheckVaultHealth` when validating the local mock API (`http://localhost:8080`).

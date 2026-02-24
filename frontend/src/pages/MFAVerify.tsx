@@ -18,6 +18,7 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
 
   const [qrUrl, setQrUrl] = useState<string>("");
   const [secret, setSecret] = useState<string>("");
+  const [mockCodeHint, setMockCodeHint] = useState<string>("");
 
   useEffect(() => {
     const startSetup = async () => {
@@ -46,6 +47,7 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
 
         const secretBase32: string = data.secret || "";
         setSecret(secretBase32);
+        setMockCodeHint(typeof data.mockCode === "string" ? data.mockCode : "");
 
         if (otpAuthUrl) {
           const url =
@@ -131,6 +133,11 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
                   <p className="helper-text">
                     If you can&apos;t scan the QR, manually enter this key in your Authenticator app:{" "}
                     <strong>{secret}</strong>
+                  </p>
+                )}
+                {mockCodeHint && (
+                  <p className="helper-text">
+                    Local mock MFA code: <strong>{mockCodeHint}</strong>
                   </p>
                 )}
               </>
