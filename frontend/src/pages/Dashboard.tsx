@@ -1,3 +1,5 @@
+// frontend/src/pages/Dashboard.tsx
+
 import { useState } from "react";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
@@ -8,11 +10,14 @@ import SecurityOverview from "../components/SecurityOverview";
 import QuickActions from "../components/QuickActions";
 import PasswordGenerator from "../components/PasswordGenerator";
 import ClientVault from "./ClientVault";
+import { saveCredentialToCloud } from "../API/saveCredential";
 
 type DashboardProps = {
   username: string;
   mfaEnabled: boolean;
   onLogout?: () => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 };
 
 type ActiveView =
@@ -23,9 +28,42 @@ type ActiveView =
   | "security"
   | "settings";
 
-export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardProps) {
+export default function Dashboard({
+  username,
+  mfaEnabled,
+  onLogout,
+  theme,
+  onToggleTheme,
+}: DashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
+
+  const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
+
+  /**
+   * Tie each saved credential to the currently logged-in SecurityPass user.
+   * userId in DynamoDB = Dashboard `username` prop.
+   */
+  const handleCloudSave = async (
+    credentialId: string,
+    siteUsername: string,
+    sitePassword: string
+  ) => {
+    try {
+      const ok = await saveCredentialToCloud(
+        username, // userId in SecurityPassCredentials
+        credentialId,
+        siteUsername,
+        sitePassword
+      );
+
+      if (!ok) {
+        console.error("Failed to save credential to cloud");
+      }
+    } catch (err) {
+      console.error("Error calling saveCredentialToCloud:", err);
+    }
+  };
 
   return (
     <div className="dashboard-container">
@@ -39,14 +77,13 @@ export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardP
 
       <div className="dashboard-main">
         <TopBar
-          onAddPassword={() => alert("Add password functionality")}
+          onAddPassword={() => setActiveView("clientVault")}
           onGeneratePassword={() => setActiveView("generator")}
         />
 
         <div className="dashboard-content">
           {activeView === "dashboard" && (
             <>
-              {/* Welcome Section */}
               <div className="welcome-section">
                 <h2 className="dashboard-title">Welcome back, {username}!</h2>
                 <p className="dashboard-subtitle">
@@ -54,10 +91,8 @@ export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardP
                 </p>
               </div>
 
-              {/* Stats Cards */}
               <StatsCards />
 
-              {/* Main Grid */}
               <div className="dashboard-grid">
                 <div className="grid-col-2">
                   <RecentPasswords />
@@ -69,7 +104,9 @@ export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardP
                   <SecurityOverview />
                 </div>
                 <div className="grid-col-1">
-                  <QuickActions onGeneratePassword={() => setActiveView("generator")} />
+                  <QuickActions
+                    onGeneratePassword={() => setActiveView("generator")}
+                  />
                 </div>
               </div>
             </>
@@ -86,7 +123,10 @@ export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardP
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              <ClientVault />
+              <ClientVault
+                currentUser={username}
+                onCloudSave={handleCloudSave}
+              />
             </div>
           )}
 
@@ -94,7 +134,6 @@ export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardP
             <div className="passwords-page">
               <h2 className="dashboard-title">All Passwords</h2>
               <p className="dashboard-subtitle">Manage your stored passwords</p>
-              {/* Add your password vault component here */}
             </div>
           )}
 
@@ -108,12 +147,33 @@ export default function Dashboard({ username, mfaEnabled, onLogout }: DashboardP
           {activeView === "settings" && (
             <div className="settings-page">
               <h2 className="dashboard-title">Settings</h2>
-              <p className="dashboard-subtitle">Configure your account preferences</p>
-              {onLogout && (
-                <button className="logout-btn" onClick={onLogout}>
-                  Logout
-                </button>
-              )}
+              <p className="dashboard-subtitle">
+                Configure your account preferences
+              </p>
+
+              <div className="settings-layout">
+                <div className="settings-card">
+                  <h3 className="settings-section-title">Appearance</h3>
+                  <p className="settings-section-subtitle">
+                    Switch between light and dark themes.
+                  </p>
+                  <button className="theme-toggle" onClick={onToggleTheme}>
+                    {themeLabel}
+                  </button>
+                </div>
+
+                <div className="settings-card">
+                  <h3 className="settings-section-title">Account</h3>
+                  <p className="settings-section-subtitle">
+                    Sign out of your SecureVault session.
+                  </p>
+                  {onLogout && (
+                    <button className="logout-btn" onClick={onLogout}>
+                      Logout
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>

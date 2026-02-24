@@ -3,6 +3,15 @@ import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
 import { VAULT_API_BASE } from "../config/api";
 
+type VaultPanelProps = {
+  currentUser: string;
+  onCloudSave?: (
+    credentialId: string,
+    username: string,
+    password: string
+  ) => void | Promise<void>;
+};
+
 type Row = CipherBlob & { _idx: number };
 
 type CryptoStage =
@@ -94,7 +103,7 @@ function shannonEntropy(text?: string | null): number {
   return entropy;
 }
 
-export default function VaultPanel() {
+export default function VaultPanel({ currentUser, onCloudSave }: VaultPanelProps) {
   const { isReady, encryptOnly, storeCipherBlob, listItems, decryptItem } = useCrypto();
   const [site, setSite] = useState("");
   const [login, setLogin] = useState("");
@@ -147,7 +156,13 @@ export default function VaultPanel() {
     setSelectedMeta(null);
     try {
       const items = await listItems();
-      setRows(items.map((it, i) => ({ ...it, _idx: i })));
+      const filtered = items.filter((it) => {
+        const metaUser = (it.meta as any)?.userId as string | undefined;
+        if (!metaUser) return false;
+        return metaUser === currentUser;
+      });
+
+      setRows(filtered.map((it, i) => ({ ...it, _idx: i })));
     } catch (e: any) {
       setErr(e.message ?? String(e));
       setCryptoStage("error");
@@ -171,6 +186,7 @@ export default function VaultPanel() {
     try {
       const meta: Record<string, unknown> = {
         createdAt: new Date().toISOString(),
+        userId: currentUser,
       };
 
       const siteVal = site.trim();
@@ -210,6 +226,15 @@ export default function VaultPanel() {
 
       setCryptoStage("stored");
       addLog("Ciphertext stored successfully");
+
+      if (onCloudSave) {
+        const credentialId = `${siteVal || "item"}-${Date.now()}`;
+        try {
+          await onCloudSave(credentialId, loginVal || "", password);
+        } catch (e) {
+          console.error("Cloud save failed:", e);
+        }
+      }
 
       setSite("");
       setLogin("");
@@ -298,7 +323,7 @@ export default function VaultPanel() {
 
   useEffect(() => {
     if (isReady) void refresh();
-  }, [isReady]);
+  }, [isReady, currentUser]);
 
   if (!isReady) return <div className="muted">Login to derive your vault key...</div>;
 
