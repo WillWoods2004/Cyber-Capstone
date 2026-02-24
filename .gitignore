@@ -6,3 +6,9 @@ dist/
 # local artifacts
 cipher.json
 .env
+.env.local
+frontend/.env.local
+frontend/..env.local
+artifacts/
+coverage/
+nk/sdk/coverage/

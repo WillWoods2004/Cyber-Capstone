@@ -10,7 +10,7 @@ import SecurityOverview from "../components/SecurityOverview";
 import QuickActions from "../components/QuickActions";
 import PasswordGenerator from "../components/PasswordGenerator";
 import ClientVault from "./ClientVault";
-import { saveCredentialToCloud } from "../api/saveCredential";
+import { saveCredentialToCloud } from "../API/saveCredential";
 
 type DashboardProps = {
   username: string;
