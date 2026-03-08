@@ -11,6 +11,7 @@ type Screen = "login" | "register" | "mfa" | "dashboard";
 type Theme = "light" | "dark";
 
 const SESSION_TIMEOUT_MS = 90_000;
+const SESSION_WARNING_MS = 30_000;
 
 function App() {
   const [screen, setScreen] = useState<Screen>("login");
@@ -18,6 +19,9 @@ function App() {
   const [mfaEnabled, setMfaEnabled] = useState<boolean>(false);
   const [lastRegisteredUsername, setLastRegisteredUsername] =
     useState<string>("");
+  const [sessionWarningVisible, setSessionWarningVisible] =
+    useState<boolean>(false);
+  const [sessionTimedOut, setSessionTimedOut] = useState<boolean>(false);
 
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "light";
@@ -40,36 +44,59 @@ function App() {
     setTheme(theme === "light" ? "dark" : "light");
   };
 
-  // Called by Login.tsx when password is correct
-  // mfaFromApi = whether the backend says this user already has MFA set up
   const handlePasswordOk = (mfaFromApi: boolean, username: string) => {
     setCurrentUser(username);
     setMfaEnabled(mfaFromApi);
+    setSessionTimedOut(false);
+    setSessionWarningVisible(false);
     setScreen("mfa");
   };
 
   const handleMfaOk = () => {
-    // Once MFA is successfully verified, mark it enabled and go to dashboard
     setMfaEnabled(true);
+    setSessionTimedOut(false);
+    setSessionWarningVisible(false);
     setScreen("dashboard");
   };
 
   const handleShowRegister = () => {
+    setSessionWarningVisible(false);
     setScreen("register");
   };
 
   const handleRegistered = (username: string) => {
     setLastRegisteredUsername(username);
+    setSessionWarningVisible(false);
     setScreen("login");
   };
 
   const handleCancelRegister = () => {
+    setSessionWarningVisible(false);
     setScreen("login");
   };
 
-  const handleLogout = () => {
+  const handleManualLogout = () => {
     setCurrentUser("");
     setMfaEnabled(false);
+    setSessionWarningVisible(false);
+    setSessionTimedOut(false);
+    setScreen("login");
+  };
+
+  const handleSessionWarning = () => {
+    setSessionTimedOut(false);
+    setSessionWarningVisible(true);
+  };
+
+  const handleSessionActive = () => {
+    setSessionWarningVisible(false);
+  };
+
+  const handleSessionTimeout = () => {
+    setCurrentUser("");
+    setMfaEnabled(false);
+    setSessionWarningVisible(false);
+    setSessionTimedOut(true);
     setScreen("login");
   };
 
@@ -81,11 +108,35 @@ function App() {
         <SessionTimeout
           enabled={true}
           timeoutMs={SESSION_TIMEOUT_MS}
-          onTimeout={handleLogout}
+          warningMs={SESSION_WARNING_MS}
+          onWarning={handleSessionWarning}
+          onActive={handleSessionActive}
+          onTimeout={handleSessionTimeout}
         />
       )}
 
-      {/* Only show theme toggle on non-dashboard screens */}
+      {(sessionWarningVisible || sessionTimedOut) && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            backgroundColor: "#c62828",
+            color: "#ffffff",
+            textAlign: "center",
+            padding: "12px 16px",
+            fontWeight: 700,
+            zIndex: 9999,
+            boxSizing: "border-box",
+          }}
+        >
+          {sessionTimedOut
+            ? "Your session has timed out"
+            : "Your session will expire in 30 seconds"}
+        </div>
+      )}
+
       {screen !== "dashboard" && (
         <div className="theme-toggle-container">
           <button className="theme-toggle" onClick={toggleTheme}>
@@ -127,7 +178,7 @@ function App() {
         <Dashboard
           username={currentUser}
           mfaEnabled={mfaEnabled}
-          onLogout={handleLogout}
+          onLogout={handleManualLogout}
           theme={theme}
           onToggleTheme={toggleTheme}
         />
