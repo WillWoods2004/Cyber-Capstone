@@ -3,53 +3,93 @@ import { useEffect, useRef } from "react";
 type SessionTimeoutProps = {
   enabled: boolean;
   timeoutMs?: number;
+  warningMs?: number;
+  onWarning?: () => void;
+  onActive?: () => void;
   onTimeout: () => void;
 };
 
 export default function SessionTimeout({
   enabled,
   timeoutMs = 90_000,
+  warningMs = 30_000,
+  onWarning,
+  onActive,
   onTimeout,
 }: SessionTimeoutProps) {
-  const timerRef = useRef<number | null>(null);
+  const timeoutTimerRef = useRef<number | null>(null);
+  const warningTimerRef = useRef<number | null>(null);
   const onTimeoutRef = useRef(onTimeout);
+  const onWarningRef = useRef(onWarning);
+  const onActiveRef = useRef(onActive);
   const hasTimedOutRef = useRef(false);
+  const warningShownRef = useRef(false);
 
   useEffect(() => {
     onTimeoutRef.current = onTimeout;
   }, [onTimeout]);
 
   useEffect(() => {
-    const clearExistingTimer = () => {
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
-        timerRef.current = null;
+    onWarningRef.current = onWarning;
+  }, [onWarning]);
+
+  useEffect(() => {
+    onActiveRef.current = onActive;
+  }, [onActive]);
+
+  useEffect(() => {
+    const clearTimers = () => {
+      if (timeoutTimerRef.current !== null) {
+        window.clearTimeout(timeoutTimerRef.current);
+        timeoutTimerRef.current = null;
+      }
+
+      if (warningTimerRef.current !== null) {
+        window.clearTimeout(warningTimerRef.current);
+        warningTimerRef.current = null;
       }
     };
 
     if (!enabled) {
-      clearExistingTimer();
+      clearTimers();
       hasTimedOutRef.current = false;
+      warningShownRef.current = false;
       return;
     }
 
     hasTimedOutRef.current = false;
+    warningShownRef.current = false;
 
-    const startTimer = () => {
-      clearExistingTimer();
+    const startTimers = () => {
+      clearTimers();
 
-      timerRef.current = window.setTimeout(() => {
+      const warningDelay = Math.max(timeoutMs - warningMs, 0);
+
+      warningTimerRef.current = window.setTimeout(() => {
+        if (hasTimedOutRef.current || warningShownRef.current) return;
+
+        warningShownRef.current = true;
+        onWarningRef.current?.();
+      }, warningDelay);
+
+      timeoutTimerRef.current = window.setTimeout(() => {
         if (hasTimedOutRef.current) return;
 
         hasTimedOutRef.current = true;
-        clearExistingTimer();
+        clearTimers();
         onTimeoutRef.current();
       }, timeoutMs);
     };
 
-    const resetTimer = () => {
+    const resetTimers = () => {
       if (hasTimedOutRef.current) return;
-      startTimer();
+
+      if (warningShownRef.current) {
+        warningShownRef.current = false;
+        onActiveRef.current?.();
+      }
+
+      startTimers();
     };
 
     const activityEvents: Array<keyof WindowEventMap> = [
@@ -58,24 +98,22 @@ export default function SessionTimeout({
       "keydown",
       "scroll",
       "touchstart",
-      "click",
-      "focus",
     ];
 
     activityEvents.forEach((eventName) => {
-      window.addEventListener(eventName, resetTimer);
+      window.addEventListener(eventName, resetTimers);
     });
 
-    startTimer();
+    startTimers();
 
     return () => {
-      clearExistingTimer();
+      clearTimers();
 
       activityEvents.forEach((eventName) => {
-        window.removeEventListener(eventName, resetTimer);
+        window.removeEventListener(eventName, resetTimers);
       });
     };
-  }, [enabled, timeoutMs]);
+  }, [enabled, timeoutMs, warningMs]);
 
   return null;
 }
