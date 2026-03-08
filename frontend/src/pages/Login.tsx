@@ -3,7 +3,7 @@ import { ErrorBox } from "../components/Error";
 import { useCrypto } from "../crypto/CryptoProvider";
 import { AUTH_API_BASE } from "../config/api";
 
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 5;
 
 interface Props {
   onPasswordOk: (mfaFromApi: boolean, username: string) => void;
@@ -30,12 +30,17 @@ export default function Login({
 
   const { setMasterPassword } = useCrypto();
 
+  const limitReached = attempts >= MAX_ATTEMPTS;
+  const attemptsRemaining = Math.max(MAX_ATTEMPTS - attempts, 0);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (attempts >= MAX_ATTEMPTS) {
-      setError("Password attempt limit reached.");
+    if (limitReached) {
+      setError(
+        "Password attempt limit reached. Refresh the page to try again."
+      );
       return;
     }
 
@@ -52,8 +57,10 @@ export default function Login({
 
       if (!response.ok) {
         const serverMessage = (data && (data.message || data.error)) ?? undefined;
-
-        setError(serverMessage || `Server error (${response.status}). Please try again.`);
+        setError(
+          serverMessage ||
+            `Server error (${response.status}). Please try again.`
+        );
         return;
       }
 
@@ -65,12 +72,24 @@ export default function Login({
         onPasswordOk(mfaFromApi, username);
       } else {
         const nextAttempts = attempts + 1;
+        const nextRemaining = Math.max(MAX_ATTEMPTS - nextAttempts, 0);
+
         setAttempts(nextAttempts);
+        setPassword("");
+        setCapsOn(false);
 
         if (nextAttempts >= MAX_ATTEMPTS) {
-          setError("Password attempt limit reached.");
+          setError(
+            "Password attempt limit reached. Refresh the page to try again."
+          );
         } else {
-          setError(data.message || "Wrong username or password. Please try again.");
+          const baseMessage =
+            data.message || "Wrong username or password. Please try again.";
+          setError(
+            `${baseMessage} ${nextRemaining} password attempt${
+              nextRemaining === 1 ? "" : "s"
+            } remaining.`
+          );
         }
       }
     } catch (err) {
@@ -86,7 +105,9 @@ export default function Login({
       <div className="auth-card">
         <h2 className="auth-overline">SecurityPass</h2>
         <h1 className="auth-title">Sign in</h1>
-        <p className="auth-subtitle">Use your account to access the password manager.</p>
+        <p className="auth-subtitle">
+          Use your account to access the password manager.
+        </p>
 
         <ErrorBox message={error} />
 
@@ -106,18 +127,48 @@ export default function Login({
             <label>Password</label>
             <input
               type="password"
-              placeholder="********"
+              placeholder={
+                limitReached
+                  ? "Password entry locked"
+                  : "********"
+              }
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                if (!limitReached) {
+                  setPassword(e.target.value);
+                }
+              }}
               autoComplete="current-password"
               onKeyDown={handlePasswordKeyDown}
+              disabled={limitReached}
             />
-            {capsOn && <p className="caps-warning">Caps Lock is ON. Your password may be entered incorrectly.</p>}
+            {capsOn && !limitReached && (
+              <p className="caps-warning">
+                Caps Lock is ON. Your password may be entered incorrectly.
+              </p>
+            )}
+            {limitReached && (
+              <p className="caps-warning">
+                You have reached the maximum of {MAX_ATTEMPTS} password attempts.
+                Refresh the page to try again.
+              </p>
+            )}
           </div>
 
-          <button type="submit" disabled={attempts >= MAX_ATTEMPTS || loading} className="primary-btn">
+          <button
+            type="submit"
+            disabled={limitReached || loading}
+            className="primary-btn"
+          >
             {loading ? "Logging in..." : "Log in"}
           </button>
+
+          {!limitReached && (
+            <p className="helper-text" style={{ marginTop: "0.75rem" }}>
+              {attemptsRemaining} password attempt
+              {attemptsRemaining === 1 ? "" : "s"} remaining.
+            </p>
+          )}
 
           <p className="helper-text" style={{ marginTop: "1rem" }}>
             Don&apos;t have an account?{" "}
@@ -142,4 +193,3 @@ export default function Login({
     </div>
   );
 }
-
