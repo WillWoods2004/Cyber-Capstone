@@ -33,6 +33,29 @@ export default function Login({
   const limitReached = attempts >= MAX_ATTEMPTS;
   const attemptsRemaining = Math.max(MAX_ATTEMPTS - attempts, 0);
 
+  const registerFailedAttempt = (message?: string) => {
+    const nextAttempts = attempts + 1;
+    const nextRemaining = Math.max(MAX_ATTEMPTS - nextAttempts, 0);
+
+    setAttempts(nextAttempts);
+    setPassword("");
+    setCapsOn(false);
+
+    if (nextAttempts >= MAX_ATTEMPTS) {
+      setError(
+        "Password attempt limit reached. Refresh the page to try again."
+      );
+    } else {
+      setError(
+        `${
+          message || "Incorrect password. Please try again."
+        } ${nextRemaining} password attempt${
+          nextRemaining === 1 ? "" : "s"
+        } remaining.`
+      );
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -56,41 +79,24 @@ export default function Login({
       const data: any = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const serverMessage = (data && (data.message || data.error)) ?? undefined;
-        setError(
-          serverMessage ||
-            `Server error (${response.status}). Please try again.`
-        );
+        const serverMessage =
+          (data && (data.message || data.error)) ||
+          `Server error (${response.status}). Please try again.`;
+
+        registerFailedAttempt(serverMessage);
         return;
       }
 
       if (data.success) {
         await setMasterPassword(username, password);
         setPassword("");
+        setError("");
+        setCapsOn(false);
 
         const mfaFromApi = Boolean(data.mfaEnabled);
         onPasswordOk(mfaFromApi, username);
       } else {
-        const nextAttempts = attempts + 1;
-        const nextRemaining = Math.max(MAX_ATTEMPTS - nextAttempts, 0);
-
-        setAttempts(nextAttempts);
-        setPassword("");
-        setCapsOn(false);
-
-        if (nextAttempts >= MAX_ATTEMPTS) {
-          setError(
-            "Password attempt limit reached. Refresh the page to try again."
-          );
-        } else {
-          const baseMessage =
-            data.message || "Wrong username or password. Please try again.";
-          setError(
-            `${baseMessage} ${nextRemaining} password attempt${
-              nextRemaining === 1 ? "" : "s"
-            } remaining.`
-          );
-        }
+        registerFailedAttempt(data.message || "Incorrect password. Please try again.");
       }
     } catch (err) {
       console.error("Login network error:", err);
@@ -127,11 +133,7 @@ export default function Login({
             <label>Password</label>
             <input
               type="password"
-              placeholder={
-                limitReached
-                  ? "Password entry locked"
-                  : "********"
-              }
+              placeholder={limitReached ? "Password entry locked" : "********"}
               value={password}
               onChange={(e) => {
                 if (!limitReached) {
@@ -163,12 +165,10 @@ export default function Login({
             {loading ? "Logging in..." : "Log in"}
           </button>
 
-          {!limitReached && (
-            <p className="helper-text" style={{ marginTop: "0.75rem" }}>
-              {attemptsRemaining} password attempt
-              {attemptsRemaining === 1 ? "" : "s"} remaining.
-            </p>
-          )}
+          <p className="helper-text" style={{ marginTop: "0.75rem" }}>
+            {attemptsRemaining} password attempt
+            {attemptsRemaining === 1 ? "" : "s"} remaining.
+          </p>
 
           <p className="helper-text" style={{ marginTop: "1rem" }}>
             Don&apos;t have an account?{" "}
