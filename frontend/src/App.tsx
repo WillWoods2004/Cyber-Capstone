@@ -5,7 +5,7 @@ import Login from "./pages/Login";
 import MFAVerify from "./pages/MFAVerify";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
-import SessionTimeout from "./pages/SessionTimeout";
+import SessionTimeout from "./SessionTimeout";
 
 type Screen = "login" | "register" | "mfa" | "dashboard";
 type Theme = "light" | "dark";
@@ -94,7 +94,6 @@ function App() {
         </div>
       )}
 
-      {/* Conditional rendering based on screen */}
       {screen === "login" && (
         <div className="min-h-screen flex items-center justify-center">
           <Login
