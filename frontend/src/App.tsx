@@ -5,9 +5,12 @@ import Login from "./pages/Login";
 import MFAVerify from "./pages/MFAVerify";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import SessionTimeout from "./pages/SessionTimeout";
 
 type Screen = "login" | "register" | "mfa" | "dashboard";
 type Theme = "light" | "dark";
+
+const SESSION_TIMEOUT_MS = 90_000;
 
 function App() {
   const [screen, setScreen] = useState<Screen>("login");
@@ -74,6 +77,14 @@ function App() {
 
   return (
     <div className="app-root">
+      {screen === "dashboard" && (
+        <SessionTimeout
+          enabled={true}
+          timeoutMs={SESSION_TIMEOUT_MS}
+          onTimeout={handleLogout}
+        />
+      )}
+
       {/* Only show theme toggle on non-dashboard screens */}
       {screen !== "dashboard" && (
         <div className="theme-toggle-container">
@@ -107,7 +118,7 @@ function App() {
         <div className="min-h-screen flex items-center justify-center">
           <MFAVerify
             username={currentUser}
-            enrolled={mfaEnabled}   // <-- key fix: pass enrolled flag correctly
+            enrolled={mfaEnabled}
             onMfaOk={handleMfaOk}
           />
         </div>
@@ -118,7 +129,6 @@ function App() {
           username={currentUser}
           mfaEnabled={mfaEnabled}
           onLogout={handleLogout}
-          // these props are used by your updated Dashboard.tsx
           theme={theme}
           onToggleTheme={toggleTheme}
         />
