@@ -15,7 +15,9 @@ Provide actionable security visibility and incident response evidence.
 - Live smoke validation still shows a delete inconsistency:
   - `DELETE /vault/items/{id}` returns `204`
   - follow-up `GET /vault/items` still shows the deleted row
-- This delete inconsistency should be tracked as an operational issue until CloudWatch logs confirm whether the failure is in Lambda logic, DynamoDB delete behavior, or eventual-consistency handling.
+- Public `GET /vault/items/{id}` returned `404` during live probing, which means the public API contract currently differs from the local mock API/OpenAPI spec.
+- The deleted row still appeared in `GET /vault/items` after a 10-second wait, which makes short eventual consistency less likely than a live route/runtime mismatch.
+- The deployed Amplify bundle still contains the legacy `/credentials` helper, so any `/credentials` invocation should be treated as a data-handling regression until the frontend is redeployed.
 
 ## Alert Matrix
 | Alert | Trigger | Threshold | Action |
@@ -24,6 +26,7 @@ Provide actionable security visibility and incident response evidence.
 | MFA failures spike | Failed MFA verifies | > X failures in Y minutes | Lock account policy / review |
 | API error rate | 5xx count | > X in Y minutes | Check Lambda/API health |
 | Delete anomaly | DELETE returns success but row persists | any confirmed occurrence | Review Lambda logs + DynamoDB keys/filtering |
+| Legacy plaintext sync | `/credentials` helper present or invoked by frontend | any confirmed occurrence | Redeploy frontend, disable old endpoint, audit stored data |
 | Unauthorized access | 401/403 anomalies | sustained deviation | Validate IAM/CORS/auth logic |
 
 ## Incident Workflow
@@ -43,3 +46,4 @@ Provide actionable security visibility and incident response evidence.
 - Alarm definitions screenshot
 - One sample alert and remediation note
 - Log retention policy screenshot
+- Bundle inspection or build-verification output showing no legacy `/credentials` helper in the released frontend

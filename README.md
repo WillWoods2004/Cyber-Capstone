@@ -91,7 +91,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\ops\check-endpoints.ps1 `
   -AuthApiBase "https://<api-id>.execute-api.<region>.amazonaws.com/prod" `
   -CheckAuthRoutes `
   -Origin "https://<amplify-app-domain>" `
-  -SmokeVaultCrud
+  -SmokeVaultCrud `
+  -EvidenceOutputPath ".\artifacts\nk\live-endpoint-check.json"
+```
+
+Before releasing a frontend build, verify the repo does not contain the retired plaintext `/credentials` helper:
+```powershell
+pwsh .\scripts\ops\assert-no-legacy-cloud-save.ps1
 ```
 
 Add `-CheckVaultHealth` when validating the local mock API (`http://localhost:8080`).

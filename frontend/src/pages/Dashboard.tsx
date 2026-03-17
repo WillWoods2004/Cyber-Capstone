@@ -10,7 +10,6 @@ import SecurityOverview from "../components/SecurityOverview";
 import QuickActions from "../components/QuickActions";
 import PasswordGenerator from "../components/PasswordGenerator";
 import ClientVault from "./ClientVault";
-import { saveCredentialToCloud } from "../API/saveCredential";
 
 type DashboardProps = {
   username: string;
@@ -39,31 +38,6 @@ export default function Dashboard({
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
-
-  /**
-   * Tie each saved credential to the currently logged-in SecurityPass user.
-   * userId in DynamoDB = Dashboard `username` prop.
-   */
-  const handleCloudSave = async (
-    credentialId: string,
-    siteUsername: string,
-    sitePassword: string
-  ) => {
-    try {
-      const ok = await saveCredentialToCloud(
-        username, // userId in SecurityPassCredentials
-        credentialId,
-        siteUsername,
-        sitePassword
-      );
-
-      if (!ok) {
-        console.error("Failed to save credential to cloud");
-      }
-    } catch (err) {
-      console.error("Error calling saveCredentialToCloud:", err);
-    }
-  };
 
   return (
     <div className="dashboard-container">
@@ -123,10 +97,7 @@ export default function Dashboard({
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              <ClientVault
-                currentUser={username}
-                onCloudSave={handleCloudSave}
-              />
+              <ClientVault currentUser={username} />
             </div>
           )}
 
