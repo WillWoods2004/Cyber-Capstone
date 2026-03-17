@@ -3,10 +3,14 @@ param(
   [string]$AuthApiBase = "",
   [string]$Origin = "",
   [switch]$CheckAuthRoutes,
-  [switch]$CheckVaultHealth
+  [switch]$CheckVaultHealth,
+  [switch]$SmokeVaultCrud,
+  [string]$CrudUserId = "nk-smoke-user",
+  [string]$EvidenceOutputPath = ""
 )
 
 $ErrorActionPreference = "Continue"
+$script:CheckResults = @()
 
 function Normalize-Base {
   param([string]$Value)
@@ -45,19 +49,101 @@ function Invoke-Probe {
     return [pscustomobject]@{
       Status = [int]$res.StatusCode
       Headers = $res.Headers
+      Content = [string]$res.Content
     }
   } catch {
     if ($_.Exception.Response) {
+      $content = ""
+      try {
+        $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+        $content = $reader.ReadToEnd()
+      } catch {
+        $content = ""
+      }
+
       return [pscustomobject]@{
         Status = [int]$_.Exception.Response.StatusCode
         Headers = $_.Exception.Response.Headers
+        Content = $content
       }
     }
     return [pscustomobject]@{
       Status = 0
       Headers = @{}
+      Content = ""
     }
   }
+}
+
+function ConvertFrom-JsonSafe {
+  param(
+    [string]$Value,
+    $Fallback = $null
+  )
+
+  if (-not $Value -or $Value.Trim().Length -eq 0) {
+    return $Fallback
+  }
+
+  try {
+    return $Value | ConvertFrom-Json
+  } catch {
+    return $Fallback
+  }
+}
+
+function Add-CheckResult {
+  param(
+    [Parameter(Mandatory = $true)][string]$Name,
+    [Parameter(Mandatory = $true)][bool]$Ok,
+    [string]$Method = "",
+    [string]$Url = "",
+    [int]$Status = 0,
+    [string]$Detail = "",
+    [string]$Level = "check"
+  )
+
+  $script:CheckResults += [pscustomobject]@{
+    name = $Name
+    ok = $Ok
+    method = $Method
+    url = $Url
+    status = $Status
+    detail = $Detail
+    level = $Level
+    recordedAtUtc = [DateTime]::UtcNow.ToString("o")
+  }
+}
+
+function Write-EvidenceFile {
+  param(
+    [Parameter(Mandatory = $true)][string]$OutputPath,
+    [Parameter(Mandatory = $true)][bool]$Passed,
+    [Parameter(Mandatory = $true)][string]$VaultBase,
+    [string]$AuthBase = "",
+    [string]$AllowedOrigin = ""
+  )
+
+  $dir = Split-Path -Parent $OutputPath
+  if ($dir -and -not (Test-Path $dir)) {
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  }
+
+  $summary = [pscustomobject]@{
+    generatedAtUtc = [DateTime]::UtcNow.ToString("o")
+    vaultApiBase = $VaultBase
+    authApiBase = $AuthBase
+    origin = $AllowedOrigin
+    checkAuthRoutes = $CheckAuthRoutes.IsPresent
+    checkVaultHealth = $CheckVaultHealth.IsPresent
+    smokeVaultCrud = $SmokeVaultCrud.IsPresent
+    crudUserId = $CrudUserId
+    passed = $Passed
+    results = $script:CheckResults
+  }
+
+  $summary | ConvertTo-Json -Depth 10 | Set-Content -Path $OutputPath -Encoding UTF8
+  Write-Host "Evidence written to $OutputPath"
 }
 
 function Test-ExactStatus {
@@ -78,6 +164,8 @@ function Test-ExactStatus {
     Write-Host "[FAIL] $Name -> $($probe.Status) $Method $Url (expected: $($ExpectedStatuses -join ', '))"
   }
 
+  Add-CheckResult -Name $Name -Ok $ok -Method $Method -Url $Url -Status $probe.Status -Detail "Expected: $($ExpectedStatuses -join ', ')"
+
   return $ok
 }
 
@@ -97,6 +185,8 @@ function Test-RouteExists {
   } else {
     Write-Host "[FAIL] $Name -> route missing/unreachable ($($probe.Status)) $Method $Url"
   }
+
+  Add-CheckResult -Name $Name -Ok $ok -Method $Method -Url $Url -Status $probe.Status -Detail "Route reachability probe"
 
   return $ok
 }
@@ -131,7 +221,156 @@ function Test-CorsPreflight {
     Write-Host "[FAIL] $Name CORS -> $($probe.Status) ACAO=$allowOrigin ACAM=$allowMethods ACAH=$allowHeaders"
   }
 
+  Add-CheckResult -Name "$Name CORS" -Ok $ok -Method "OPTIONS" -Url $Url -Status $probe.Status -Detail "ACAO=$allowOrigin; ACAM=$allowMethods; ACAH=$allowHeaders"
+
   return $ok
+}
+
+function New-SmokeCipherPayload {
+  param(
+    [Parameter(Mandatory = $true)][string]$UserId,
+    [Parameter(Mandatory = $true)][string]$ItemId
+  )
+
+  $ctBytes = [System.Text.Encoding]::UTF8.GetBytes("nk-smoke-ct")
+  $ivBytes = 0..11
+  $tagBytes = 0..15
+
+  return @{
+    id = $ItemId
+    ct = [Convert]::ToBase64String($ctBytes)
+    iv = [Convert]::ToBase64String([byte[]]$ivBytes)
+    tag = [Convert]::ToBase64String([byte[]]$tagBytes)
+    meta = @{
+      userId = $UserId
+      site = "nk-smoke.example"
+      login = "nk-smoke"
+      label = "nk smoke"
+      createdAt = [DateTime]::UtcNow.ToString("o")
+    }
+  } | ConvertTo-Json -Depth 5 -Compress
+}
+
+function Test-VaultCrud {
+  param(
+    [Parameter(Mandatory = $true)][string]$VaultBase,
+    [Parameter(Mandatory = $true)][string]$UserId
+  )
+
+  $itemId = "nk-smoke-" + [Guid]::NewGuid().ToString("N").Substring(0, 8)
+  $body = New-SmokeCipherPayload -UserId $UserId -ItemId $itemId
+
+  $postProbe = Invoke-Probe -Method "POST" -Url "$VaultBase/vault/items" -Body $body
+  $postPayload = ConvertFrom-JsonSafe -Value $postProbe.Content -Fallback @{}
+  $postOk = (($postProbe.Status -eq 200) -or ($postProbe.Status -eq 201)) -and ($postPayload.id -eq $itemId)
+
+  if ($postOk) {
+    Write-Host "[PASS] Vault smoke POST -> $($postProbe.Status) created id $itemId"
+  } else {
+    Write-Host "[FAIL] Vault smoke POST -> $($postProbe.Status) response=$($postProbe.Content)"
+    Add-CheckResult -Name "Vault smoke POST" -Ok $false -Method "POST" -Url "$VaultBase/vault/items" -Status $postProbe.Status -Detail $postProbe.Content
+    return $false
+  }
+
+  Add-CheckResult -Name "Vault smoke POST" -Ok $true -Method "POST" -Url "$VaultBase/vault/items" -Status $postProbe.Status -Detail "created id $itemId"
+
+  $listProbe = Invoke-Probe -Method "GET" -Url "$VaultBase/vault/items"
+  $listPayload = ConvertFrom-JsonSafe -Value $listProbe.Content -Fallback @{}
+  $items = @()
+  if ($listPayload -is [System.Array]) {
+    $items = $listPayload
+  } elseif ($null -ne $listPayload.items) {
+    $items = @($listPayload.items)
+  }
+
+  $found = $false
+  foreach ($item in $items) {
+    if ($item.id -eq $itemId) {
+      $found = $true
+      break
+    }
+  }
+
+  if ($listProbe.Status -eq 200 -and $found) {
+    Write-Host "[PASS] Vault smoke GET -> located id $itemId"
+  } else {
+    Write-Host "[FAIL] Vault smoke GET -> $($listProbe.Status) located=$found response=$($listProbe.Content)"
+    Add-CheckResult -Name "Vault smoke GET" -Ok $false -Method "GET" -Url "$VaultBase/vault/items" -Status $listProbe.Status -Detail "located=$found; response=$($listProbe.Content)"
+    return $false
+  }
+
+  Add-CheckResult -Name "Vault smoke GET" -Ok $true -Method "GET" -Url "$VaultBase/vault/items" -Status $listProbe.Status -Detail "located id $itemId"
+
+  $itemGetBeforeProbe = Invoke-Probe -Method "GET" -Url "$VaultBase/vault/items/$itemId"
+  if ($itemGetBeforeProbe.Status -eq 200) {
+    Write-Host "[PASS] Vault item GET route -> 200 for id $itemId"
+    Add-CheckResult -Name "Vault item GET route" -Ok $true -Method "GET" -Url "$VaultBase/vault/items/$itemId" -Status $itemGetBeforeProbe.Status -Detail "Item route is deployed"
+  } else {
+    Write-Host "[INFO] Vault item GET route -> $($itemGetBeforeProbe.Status) for id $itemId"
+    Add-CheckResult -Name "Vault item GET route" -Ok $false -Method "GET" -Url "$VaultBase/vault/items/$itemId" -Status $itemGetBeforeProbe.Status -Detail "Route absent or item lookup unavailable on the live API" -Level "info"
+  }
+
+  $deleteProbe = Invoke-Probe -Method "DELETE" -Url "$VaultBase/vault/items/$itemId"
+  $deleteOk = ($deleteProbe.Status -eq 200) -or ($deleteProbe.Status -eq 204)
+
+  if ($deleteOk) {
+    Write-Host "[PASS] Vault smoke DELETE -> $($deleteProbe.Status) removed id $itemId"
+  } else {
+    Write-Host "[FAIL] Vault smoke DELETE -> $($deleteProbe.Status) response=$($deleteProbe.Content)"
+    Add-CheckResult -Name "Vault smoke DELETE" -Ok $false -Method "DELETE" -Url "$VaultBase/vault/items/$itemId" -Status $deleteProbe.Status -Detail $deleteProbe.Content
+    return $false
+  }
+
+  Add-CheckResult -Name "Vault smoke DELETE" -Ok $true -Method "DELETE" -Url "$VaultBase/vault/items/$itemId" -Status $deleteProbe.Status -Detail "Delete acknowledged for id $itemId"
+
+  $removed = $false
+  $verifyProbe = $null
+  $itemStillPresent = $false
+  for ($i = 0; $i -lt 3; $i++) {
+    Start-Sleep -Milliseconds 500
+    $verifyProbe = Invoke-Probe -Method "GET" -Url "$VaultBase/vault/items"
+    $verifyPayload = ConvertFrom-JsonSafe -Value $verifyProbe.Content -Fallback @{}
+    $verifyItems = @()
+    if ($verifyPayload -is [System.Array]) {
+      $verifyItems = $verifyPayload
+    } elseif ($null -ne $verifyPayload.items) {
+      $verifyItems = @($verifyPayload.items)
+    }
+
+    $match = $false
+    foreach ($item in $verifyItems) {
+      if ($item.id -eq $itemId) {
+        $match = $true
+        $itemStillPresent = $true
+        break
+      }
+    }
+
+    if (-not $match) {
+      $removed = $true
+      break
+    }
+  }
+
+  if ($removed) {
+    Write-Host "[PASS] Vault smoke verify delete -> id $itemId no longer listed"
+    Add-CheckResult -Name "Vault smoke verify delete" -Ok $true -Method "GET" -Url "$VaultBase/vault/items" -Status $verifyProbe.Status -Detail "id $itemId no longer listed"
+  } else {
+    Write-Host "[FAIL] Vault smoke verify delete -> id $itemId still present after delete"
+    Add-CheckResult -Name "Vault smoke verify delete" -Ok $false -Method "GET" -Url "$VaultBase/vault/items" -Status $verifyProbe.Status -Detail "id $itemId still present after delete"
+
+    $itemGetAfterProbe = Invoke-Probe -Method "GET" -Url "$VaultBase/vault/items/$itemId"
+    if ($itemGetAfterProbe.Status -eq 404 -and $itemStillPresent) {
+      Write-Host "[INFO] Delete diagnosis -> item route is 404, but list still returns id $itemId after delete"
+      Add-CheckResult -Name "Delete diagnosis" -Ok $false -Method "GET" -Url "$VaultBase/vault/items/$itemId" -Status $itemGetAfterProbe.Status -Detail "List still returns id $itemId after DELETE. This suggests a live route/runtime mismatch rather than short eventual consistency." -Level "info"
+    } else {
+      Add-CheckResult -Name "Delete diagnosis" -Ok $false -Method "GET" -Url "$VaultBase/vault/items/$itemId" -Status $itemGetAfterProbe.Status -Detail "Post-delete item probe status: $($itemGetAfterProbe.Status)" -Level "info"
+    }
+
+    return $false
+  }
+
+  return $true
 }
 
 $vaultBase = Normalize-Base $VaultApiBase
@@ -163,6 +402,14 @@ if ($Origin -and $Origin.Trim().Length -gt 0) {
     $ok = (Test-CorsPreflight -Name "MFA setup" -Url "$authBase/mfa/setup" -RequestedMethod "POST" -TargetOrigin $Origin) -and $ok
     $ok = (Test-CorsPreflight -Name "MFA verify" -Url "$authBase/mfa/verify" -RequestedMethod "POST" -TargetOrigin $Origin) -and $ok
   }
+}
+
+if ($SmokeVaultCrud) {
+  $ok = (Test-VaultCrud -VaultBase $vaultBase -UserId $CrudUserId) -and $ok
+}
+
+if ($EvidenceOutputPath -and $EvidenceOutputPath.Trim().Length -gt 0) {
+  Write-EvidenceFile -OutputPath $EvidenceOutputPath -Passed $ok -VaultBase $vaultBase -AuthBase $authBase -AllowedOrigin $Origin
 }
 
 if (-not $ok) {

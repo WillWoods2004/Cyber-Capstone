@@ -5,11 +5,6 @@ import { VAULT_API_BASE } from "../config/api";
 
 type VaultPanelProps = {
   currentUser: string;
-  onCloudSave?: (
-    credentialId: string,
-    username: string,
-    password: string
-  ) => void | Promise<void>;
 };
 
 type Row = CipherBlob & { _idx: number };
@@ -103,7 +98,7 @@ function shannonEntropy(text?: string | null): number {
   return entropy;
 }
 
-export default function VaultPanel({ currentUser, onCloudSave }: VaultPanelProps) {
+export default function VaultPanel({ currentUser }: VaultPanelProps) {
   const { isReady, encryptOnly, storeCipherBlob, listItems, decryptItem } = useCrypto();
   const [site, setSite] = useState("");
   const [login, setLogin] = useState("");
@@ -229,15 +224,6 @@ export default function VaultPanel({ currentUser, onCloudSave }: VaultPanelProps
 
       setCryptoStage("stored");
       addLog("Ciphertext stored successfully");
-
-      if (onCloudSave) {
-        const credentialId = `${siteVal || "item"}-${Date.now()}`;
-        try {
-          await onCloudSave(credentialId, loginVal || "", password);
-        } catch (e) {
-          console.error("Cloud save failed:", e);
-        }
-      }
 
       setSite("");
       setLogin("");

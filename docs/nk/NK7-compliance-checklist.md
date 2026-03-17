@@ -7,13 +7,21 @@ Track baseline hardening and compliance alignment (CIS/NIST style).
 | Control Area | Requirement | Evidence Location | Status |
 | --- | --- | --- | --- |
 | Identity | Least-privilege IAM roles for Lambda/API | IAM policy screenshots + JSON export | Pending cloud evidence |
-| Transport | TLS for public endpoints | ACM + custom domain screenshots | Pending cloud evidence |
+| Transport | TLS for public endpoints | Amplify HTTPS URL + API Gateway invoke URL | Implemented (live HTTPS verified 2026-03-16) |
 | Logging | Centralized logs enabled | CloudWatch log group screenshots | Pending cloud evidence |
 | Monitoring | Alerts configured for failures/anomalies | CloudWatch alarm screenshots | Pending cloud evidence |
-| Secrets | No plaintext secrets in repo | Repo scan + config review | In progress |
-| Data Protection | Ciphertext-only vault storage | `nk/api/src/server.ts`, `nk/docs/openapi.yaml` | Implemented |
+| Secrets | No plaintext secrets in repo | `git grep` repo scan on 2026-03-16 + config review | Pass |
+| Data Protection | Ciphertext-only vault storage and transport | `frontend/src/crypto/crypto.ts`, `frontend/src/components/VaultPanel.tsx`, `frontend/src/pages/Dashboard.tsx`, `scripts/ops/assert-no-legacy-cloud-save.ps1` | Repo fixed; live redeploy pending |
 | Backups | PITR + restore drill | `docs/nk/NK6-backup-restore.md` + AWS screenshots | Pending cloud evidence |
-| Change Control | CI checks before merge | `.github/workflows/ci-security.yml` | Implemented |
+| Change Control | CI checks before merge | `.github/workflows/ci-security.yml` | Pass |
+
+## Current Findings
+- Live deployment is using HTTPS on both frontend and backend endpoints.
+- No tracked-file secret matches were found during a repo scan on 2026-03-16.
+- The repo vault storage path sends ciphertext fields (`ct`, `iv`, `tag`) rather than plaintext password material.
+- The repo branch removes the legacy plaintext `/credentials` helper and CI now blocks that pattern from returning.
+- The currently deployed Amplify bundle still contains the legacy plaintext helper, so this control is not fully closed until the frontend is redeployed.
+- IAM, CloudWatch logging, alarm configuration, and backup evidence still need direct AWS screenshots/exports.
 
 ## CIS/NIST Mapping Notes
 - Use this as a mapping table in final report:
