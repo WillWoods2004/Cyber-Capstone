@@ -113,8 +113,9 @@ const PasswordGenerator = () => {
         symbols: options.useSymbols,
       });
       alert("Saved to vault.");
-    } catch (e: any) {
-      alert(`Save failed: ${e?.message ?? String(e)}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      alert(`Save failed: ${message}`);
     }
   };
 

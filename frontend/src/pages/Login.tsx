@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { ErrorBox } from "../components/Error";
 import { useCrypto } from "../crypto/CryptoProvider";
+import type { VaultProfile } from "../crypto/crypto";
 import { AUTH_API_BASE } from "../config/api";
+import { saveChallengeToken } from "../auth/session";
 
 const MAX_ATTEMPTS = 5;
 
@@ -9,6 +11,22 @@ interface Props {
   onPasswordOk: (mfaFromApi: boolean, username: string) => void;
   onShowRegister: () => void;
   initialUsername?: string;
+}
+
+function normalizeVaultProfile(value: unknown): VaultProfile {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    typeof (value as { salt?: unknown }).salt !== "string" ||
+    typeof (value as { keyVersion?: unknown }).keyVersion !== "number"
+  ) {
+    throw new Error("Vault profile is missing from the login response.");
+  }
+
+  return {
+    salt: (value as { salt: string }).salt,
+    keyVersion: (value as { keyVersion: number }).keyVersion,
+  };
 }
 
 export default function Login({
@@ -21,14 +39,9 @@ export default function Login({
   const [error, setError] = useState("");
   const [attempts, setAttempts] = useState(0);
   const [loading, setLoading] = useState(false);
-
   const [capsOn, setCapsOn] = useState(false);
-  const handlePasswordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const isCaps = e.getModifierState && e.getModifierState("CapsLock");
-    setCapsOn(isCaps);
-  };
 
-  const { setMasterPassword } = useCrypto();
+  const { unlockVault, clearKey } = useCrypto();
 
   const limitReached = attempts >= MAX_ATTEMPTS;
   const attemptsRemaining = Math.max(MAX_ATTEMPTS - attempts, 0);
@@ -40,30 +53,30 @@ export default function Login({
     setAttempts(nextAttempts);
     setPassword("");
     setCapsOn(false);
+    clearKey();
 
     if (nextAttempts >= MAX_ATTEMPTS) {
-      setError(
-        "Password attempt limit reached. Refresh the page to try again."
-      );
+      setError("Password attempt limit reached. Refresh the page to try again.");
     } else {
       setError(
-        `${
-          message || "Incorrect password. Please try again."
-        } ${nextRemaining} password attempt${
+        `${message || "Incorrect password. Please try again."} ${nextRemaining} password attempt${
           nextRemaining === 1 ? "" : "s"
         } remaining.`
       );
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePasswordKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const isCaps = event.getModifierState && event.getModifierState("CapsLock");
+    setCapsOn(isCaps);
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError("");
 
     if (limitReached) {
-      setError(
-        "Password attempt limit reached. Refresh the page to try again."
-      );
+      setError("Password attempt limit reached. Refresh the page to try again.");
       return;
     }
 
@@ -76,31 +89,34 @@ export default function Login({
         body: JSON.stringify({ username, password }),
       });
 
-      const data: any = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
+      const data = await response.json().catch((): Record<string, unknown> => ({}));
+      if (!response.ok || !data.success) {
         const serverMessage =
-          (data && (data.message || data.error)) ||
+          (typeof data.message === "string" && data.message) ||
+          (typeof data.error === "string" && data.error) ||
           `Server error (${response.status}). Please try again.`;
-
         registerFailedAttempt(serverMessage);
         return;
       }
 
-      if (data.success) {
-        await setMasterPassword(username, password);
-        setPassword("");
-        setError("");
-        setCapsOn(false);
-
-        const mfaFromApi = Boolean(data.mfaEnabled);
-        onPasswordOk(mfaFromApi, username);
-      } else {
-        registerFailedAttempt(data.message || "Incorrect password. Please try again.");
+      const challengeToken = typeof data.challengeToken === "string" ? data.challengeToken : "";
+      if (!challengeToken) {
+        throw new Error("Login succeeded but the MFA challenge token was missing. Please try again.");
       }
+
+      const profile = normalizeVaultProfile(data.vaultProfile);
+      await unlockVault(username, password, profile);
+      saveChallengeToken(challengeToken);
+
+      setPassword("");
+      setError("");
+      setCapsOn(false);
+
+      onPasswordOk(Boolean(data.mfaEnabled), username);
     } catch (err) {
       console.error("Login network error:", err);
-      setError("Network error. Try again.");
+      clearKey();
+      setError(err instanceof Error ? err.message : "Network error. Try again.");
     } finally {
       setLoading(false);
     }
@@ -111,9 +127,7 @@ export default function Login({
       <div className="auth-card">
         <h2 className="auth-overline">SecurityPass</h2>
         <h1 className="auth-title">Sign in</h1>
-        <p className="auth-subtitle">
-          Use your account to access the password manager.
-        </p>
+        <p className="auth-subtitle">Use your account to access the password manager.</p>
 
         <ErrorBox message={error} />
 
@@ -124,7 +138,7 @@ export default function Login({
               type="text"
               placeholder="your.email@example.com"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(event) => setUsername(event.target.value)}
               autoComplete="username"
             />
           </div>
@@ -135,9 +149,9 @@ export default function Login({
               type="password"
               placeholder={limitReached ? "Password entry locked" : "********"}
               value={password}
-              onChange={(e) => {
+              onChange={(event) => {
                 if (!limitReached) {
-                  setPassword(e.target.value);
+                  setPassword(event.target.value);
                 }
               }}
               autoComplete="current-password"
@@ -145,29 +159,21 @@ export default function Login({
               disabled={limitReached}
             />
             {capsOn && !limitReached && (
-              <p className="caps-warning">
-                Caps Lock is ON. Your password may be entered incorrectly.
-              </p>
+              <p className="caps-warning">Caps Lock is ON. Your password may be entered incorrectly.</p>
             )}
             {limitReached && (
               <p className="caps-warning">
-                You have reached the maximum of {MAX_ATTEMPTS} password attempts.
-                Refresh the page to try again.
+                You have reached the maximum of {MAX_ATTEMPTS} password attempts. Refresh the page to try again.
               </p>
             )}
           </div>
 
-          <button
-            type="submit"
-            disabled={limitReached || loading}
-            className="primary-btn"
-          >
+          <button type="submit" disabled={limitReached || loading} className="primary-btn">
             {loading ? "Logging in..." : "Log in"}
           </button>
 
           <p className="helper-text" style={{ marginTop: "0.75rem" }}>
-            {attemptsRemaining} password attempt
-            {attemptsRemaining === 1 ? "" : "s"} remaining.
+            {attemptsRemaining} password attempt{attemptsRemaining === 1 ? "" : "s"} remaining.
           </p>
 
           <p className="helper-text" style={{ marginTop: "1rem" }}>

@@ -1,10 +1,6 @@
 import VaultPanel from "../components/VaultPanel";
 
-type ClientVaultProps = {
-  currentUser: string;
-};
-
-export default function ClientVault({ currentUser }: ClientVaultProps) {
+export default function ClientVault() {
   return (
     <div className="client-vault-page">
       <div className="client-vault-header">
@@ -21,7 +17,7 @@ export default function ClientVault({ currentUser }: ClientVaultProps) {
 
       <div className="client-vault-grid">
         <div className="client-vault-card">
-          <VaultPanel currentUser={currentUser} />
+          <VaultPanel />
         </div>
       </div>
     </div>

@@ -2,12 +2,13 @@ type SecurityOverviewProps = {
   expanded?: boolean;
 };
 
-export default function SecurityOverview({ expanded: _expanded = false }: SecurityOverviewProps) {
+export default function SecurityOverview({ expanded = false }: SecurityOverviewProps) {
   const securityIssues = [
     { type: "Weak Password", count: 3, severity: "high" },
     { type: "Duplicate Password", count: 2, severity: "medium" },
     { type: "Old Password (>90 days)", count: 5, severity: "low" },
   ];
+  const visibleIssues = expanded ? securityIssues : securityIssues.slice(0, 3);
 
   return (
     <div className="panel">
@@ -29,7 +30,7 @@ export default function SecurityOverview({ expanded: _expanded = false }: Securi
 
         {/* Security Issues */}
         <div className="security-issues">
-          {securityIssues.map((issue, idx) => (
+          {visibleIssues.map((issue, idx) => (
             <div key={idx} className="security-issue">
               <div className="security-issue-left">
                 <span className={`security-severity severity-${issue.severity}`}>⚠️</span>

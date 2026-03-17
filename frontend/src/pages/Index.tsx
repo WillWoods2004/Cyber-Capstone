@@ -1,6 +1,5 @@
 // Front-End/frontend/src/pages/Index.tsx
-
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Login from "./Login";
 
 type AuthUser = {
@@ -9,22 +8,18 @@ type AuthUser = {
 };
 
 export default function IndexPage() {
-  const [isAuthed, setIsAuthed] = useState(false);
-  const [user, setUser] = useState<AuthUser | null>(null);
-
-  // Restore auth state from localStorage
-  useEffect(() => {
+  const [user, setUser] = useState<AuthUser | null>(() => {
     const storedUser = localStorage.getItem("authUser");
     if (storedUser) {
       try {
-        const parsed: AuthUser = JSON.parse(storedUser);
-        setUser(parsed);
-        setIsAuthed(true);
+        return JSON.parse(storedUser) as AuthUser;
       } catch {
         localStorage.removeItem("authUser");
       }
     }
-  }, []);
+    return null;
+  });
+  const [isAuthed, setIsAuthed] = useState(() => user !== null);
 
   // Called when Login.tsx says authentication succeeded
   const handlePasswordOk = (_mfaFromApi: boolean, username: string) => {
