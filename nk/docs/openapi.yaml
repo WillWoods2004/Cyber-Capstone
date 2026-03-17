@@ -1,12 +1,19 @@
 openapi: 3.0.3
 info: { title: SecurityPass API, version: 0.1.0 }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
 paths:
   /healthz:
     get: { responses: { "200": { description: ok } } }
   /vault/items:
     get:
+      security: [{ bearerAuth: [] }]
       responses: { "200": { description: list of ciphertext items } }
     post:
+      security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
@@ -22,8 +29,10 @@ paths:
       responses: { "201": { description: created ciphertext item } }
   /vault/items/{id}:
     get:
+      security: [{ bearerAuth: [] }]
       parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
       responses: { "200": { description: item }, "404": { description: not found } }
     delete:
+      security: [{ bearerAuth: [] }]
       parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
       responses: { "204": { description: deleted } }

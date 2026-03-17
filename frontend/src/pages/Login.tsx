@@ -5,8 +5,18 @@ import { AUTH_API_BASE } from "../config/api";
 
 const MAX_ATTEMPTS = 5;
 
+type LoginResponse = {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  username?: string;
+  normalizedUsername?: string;
+  mfaEnabled?: boolean;
+  challengeToken?: string;
+};
+
 interface Props {
-  onPasswordOk: (mfaFromApi: boolean, username: string) => void;
+  onPasswordOk: (mfaFromApi: boolean, username: string, challengeToken: string) => void;
   onShowRegister: () => void;
   initialUsername?: string;
 }
@@ -76,7 +86,7 @@ export default function Login({
         body: JSON.stringify({ username, password }),
       });
 
-      const data: any = await response.json().catch(() => ({}));
+      const data = (await response.json().catch(() => ({}))) as LoginResponse;
 
       if (!response.ok) {
         const serverMessage =
@@ -88,13 +98,29 @@ export default function Login({
       }
 
       if (data.success) {
-        await setMasterPassword(username, password);
+        const normalizedUsername =
+          typeof data.normalizedUsername === "string" && data.normalizedUsername.trim().length > 0
+            ? data.normalizedUsername
+            : username.trim().toLowerCase();
+        const displayUsername =
+          typeof data.username === "string" && data.username.trim().length > 0
+            ? data.username
+            : username.trim();
+        const challengeToken =
+          typeof data.challengeToken === "string" ? data.challengeToken : "";
+
+        if (!challengeToken) {
+          setError("Login succeeded but the MFA challenge token was missing. Please try again.");
+          return;
+        }
+
+        await setMasterPassword(normalizedUsername, password);
         setPassword("");
         setError("");
         setCapsOn(false);
 
         const mfaFromApi = Boolean(data.mfaEnabled);
-        onPasswordOk(mfaFromApi, username);
+        onPasswordOk(mfaFromApi, displayUsername, challengeToken);
       } else {
         registerFailedAttempt(data.message || "Incorrect password. Please try again.");
       }
