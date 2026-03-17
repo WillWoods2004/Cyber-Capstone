@@ -1,31 +1,16 @@
 import { useEffect, useState } from "react";
 import { ErrorBox } from "../components/Error";
 import { AUTH_API_BASE } from "../config/api";
-import { saveVaultSession } from "../auth/session";
 
 interface Props {
   username: string;
-  challengeToken: string;
   enrolled: boolean;
   onMfaOk: () => void;
 }
 
 type Mode = "setup" | "verify";
-type MfaSetupResponse = {
-  success?: boolean;
-  message?: string;
-  otpAuthUrl?: string;
-  otpauthUrl?: string;
-  secret?: string;
-  mockCode?: string;
-};
-type MfaVerifyResponse = {
-  success?: boolean;
-  message?: string;
-  authToken?: string;
-};
 
-export default function MFAVerify({ username, challengeToken, enrolled, onMfaOk }: Props) {
+export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
   const [mode] = useState<Mode>(enrolled ? "verify" : "setup");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -38,10 +23,6 @@ export default function MFAVerify({ username, challengeToken, enrolled, onMfaOk 
   useEffect(() => {
     const startSetup = async () => {
       if (mode !== "setup") return;
-      if (!challengeToken) {
-        setError("Login session expired. Please sign in again.");
-        return;
-      }
 
       setError("");
       setLoading(true);
@@ -50,11 +31,12 @@ export default function MFAVerify({ username, challengeToken, enrolled, onMfaOk 
         const response = await fetch(`${AUTH_API_BASE}/mfa/setup`, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${challengeToken}`,
+            "Content-Type": "application/json",
           },
+          body: JSON.stringify({ username }),
         });
 
-        const data = (await response.json().catch(() => ({}))) as MfaSetupResponse;
+        const data: any = await response.json().catch(() => ({}));
 
         if (!response.ok || !data.success) {
           setError(data.message || "Failed to start MFA setup. Please try again or contact support.");
@@ -81,7 +63,7 @@ export default function MFAVerify({ username, challengeToken, enrolled, onMfaOk 
     };
 
     startSetup();
-  }, [challengeToken, mode]);
+  }, [mode, username]);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,11 +74,6 @@ export default function MFAVerify({ username, challengeToken, enrolled, onMfaOk 
       return;
     }
 
-    if (!challengeToken) {
-      setError("Login session expired. Please sign in again.");
-      return;
-    }
-
     try {
       setLoading(true);
 
@@ -104,25 +81,17 @@ export default function MFAVerify({ username, challengeToken, enrolled, onMfaOk 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${challengeToken}`,
         },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ username, code }),
       });
 
-      const data = (await response.json().catch(() => ({}))) as MfaVerifyResponse;
+      const data: any = await response.json().catch(() => ({}));
 
       if (!response.ok || !data.success) {
         setError(data.message || "Invalid MFA code. Please try again.");
         return;
       }
 
-      const authToken = typeof data.authToken === "string" ? data.authToken : "";
-      if (!authToken) {
-        setError("MFA verification succeeded but the vault session token was missing.");
-        return;
-      }
-
-      saveVaultSession({ username, token: authToken });
       onMfaOk();
     } catch (err) {
       console.error("MFA verify network error:", err);

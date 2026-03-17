@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
 import { VAULT_API_BASE } from "../config/api";
@@ -8,10 +8,6 @@ type VaultPanelProps = {
 };
 
 type Row = CipherBlob & { _idx: number };
-type VaultMeta = Record<string, unknown> & {
-  site?: string;
-  login?: string;
-};
 
 type CryptoStage =
   | "idle"
@@ -102,16 +98,8 @@ function shannonEntropy(text?: string | null): number {
   return entropy;
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function getVaultMeta(meta?: Record<string, unknown>): VaultMeta {
-  return (meta ?? {}) as VaultMeta;
-}
-
 export default function VaultPanel({ currentUser }: VaultPanelProps) {
-  const { isReady, encryptOnly, storeCipherBlob, listItems, decryptItem, deleteItem } = useCrypto();
+  const { isReady, encryptOnly, storeCipherBlob, listItems, decryptItem } = useCrypto();
   const [site, setSite] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -166,12 +154,17 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
     setSelectedMeta(null);
     try {
       const items = await listItems();
-      setRows(items.map((it, i) => ({ ...it, _idx: i })));
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setErr(message);
+      const filtered = items.filter((it) => {
+        const metaUser = (it.meta as any)?.userId as string | undefined;
+        if (!metaUser) return false;
+        return metaUser === currentUser;
+      });
+
+      setRows(filtered.map((it, i) => ({ ...it, _idx: i })));
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
       setCryptoStage("error");
-      addLog(`Refresh failed: ${message}`);
+      addLog(`Refresh failed: ${e.message ?? String(e)}`);
     } finally {
       setBusy(false);
     }
@@ -191,6 +184,7 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
     try {
       const meta: Record<string, unknown> = {
         createdAt: new Date().toISOString(),
+        userId: currentUser,
       };
 
       const siteVal = site.trim();
@@ -237,11 +231,10 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
       setDecrypted(null);
       setSelectedMeta(null);
       await refresh();
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setErr(message);
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
       setCryptoStage("error");
-      addLog(`Save failed: ${message}`);
+      addLog(`Save failed: ${e.message ?? String(e)}`);
     } finally {
       setBusy(false);
     }
@@ -278,20 +271,18 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
       addLog("Decrypting payload using in-memory key");
 
       const plain = await decryptItem(r);
-      const rowMeta = getVaultMeta(r.meta);
       setDecrypted(plain);
       setSelectedMeta({
-        site: rowMeta.site,
-        login: rowMeta.login,
+        site: (r.meta as any)?.site,
+        login: (r.meta as any)?.login,
       });
       setVisualDecrypted(plain);
       setCryptoStage("decrypted");
       addLog("Decryption completed in browser memory");
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setErr(message);
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
       setCryptoStage("error");
-      addLog(`Decrypt failed: ${message}`);
+      addLog(`Decrypt failed: ${e.message ?? String(e)}`);
     } finally {
       setBusy(false);
     }
@@ -302,30 +293,26 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
     setBusy(true);
     setErr(null);
     try {
-      await deleteItem(id);
+      const res = await fetch(`${VAULT_API_BASE}/vault/items/${id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) throw new Error(`Delete failed: ${res.status}`);
       if (decrypted) {
         setDecrypted(null);
         setSelectedMeta(null);
       }
       addLog(`Deleted item ${id.slice(0, 8)}`);
       await refresh();
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setErr(message);
+    } catch (e: any) {
+      setErr(e.message ?? String(e));
       setCryptoStage("error");
-      addLog(`Delete failed: ${message}`);
+      addLog(`Delete failed: ${e.message ?? String(e)}`);
     } finally {
       setBusy(false);
     }
   }
 
-  const refreshEvent = useEffectEvent(() => {
-    void refresh();
-  });
-
   useEffect(() => {
-    if (isReady) refreshEvent();
-  }, [isReady]);
+    if (isReady) void refresh();
+  }, [isReady, currentUser]);
 
   if (!isReady) return <div className="muted">Login to derive your vault key...</div>;
 
@@ -362,9 +349,7 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
       {err && <div className="error">{err}</div>}
       <div className="muted small" style={{ marginBottom: 8 }}>
         Password is required. Site/login are optional but recommended so you can
-        recognize the entry. Vault rows are scoped to the signed-in account:
-        {" "}
-        <strong>{currentUser}</strong>.
+        recognize the entry.
       </div>
 
       <div className="crypto-visualizer">
@@ -494,9 +479,9 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
                   <td className="vault-id" title={r.id ?? ""}>
                     {(r.id ?? "").slice(0, 8) || "-"}
                   </td>
-                  <td className="vault-meta">{getVaultMeta(r.meta).site ?? "-"}</td>
+                  <td className="vault-meta">{(r.meta as any)?.site ?? "-"}</td>
                   <td className="vault-meta">
-                    {getVaultMeta(r.meta).login ?? "-"}
+                    {(r.meta as any)?.login ?? "-"}
                   </td>
                   <td className="vault-actions">
                     <button className="btn btn-primary" onClick={() => void handleDecrypt(r)} disabled={busy}>

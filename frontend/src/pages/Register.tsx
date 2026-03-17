@@ -7,11 +7,6 @@ interface Props {
   onCancel: () => void;
 }
 
-type RegisterResponse = {
-  success?: boolean;
-  message?: string;
-};
-
 export default function Register({ onRegistered, onCancel }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -49,7 +44,7 @@ export default function Register({ onRegistered, onCancel }: Props) {
         body: JSON.stringify({ username, password }),
       });
 
-      const data = (await response.json().catch(() => ({}))) as RegisterResponse;
+      const data: any = await response.json().catch(() => ({}));
 
       if (!response.ok || !data.success) {
         setError(data.message || `Registration failed (status ${response.status}). Please try again.`);

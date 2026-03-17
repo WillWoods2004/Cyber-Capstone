@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import "./dashboard.css";
-import { clearVaultSession } from "./auth/session";
-import { useCrypto } from "./crypto/CryptoProvider";
 import Login from "./pages/Login";
 import MFAVerify from "./pages/MFAVerify";
 import Register from "./pages/Register";
@@ -16,10 +14,8 @@ const SESSION_TIMEOUT_MS = 90_000;
 const SESSION_WARNING_MS = 30_000;
 
 function App() {
-  const { clearKey } = useCrypto();
   const [screen, setScreen] = useState<Screen>("login");
   const [currentUser, setCurrentUser] = useState<string>("");
-  const [challengeToken, setChallengeToken] = useState<string>("");
   const [mfaEnabled, setMfaEnabled] = useState<boolean>(false);
   const [lastRegisteredUsername, setLastRegisteredUsername] =
     useState<string>("");
@@ -48,10 +44,8 @@ function App() {
     setTheme(theme === "light" ? "dark" : "light");
   };
 
-  const handlePasswordOk = (mfaFromApi: boolean, username: string, nextChallengeToken: string) => {
-    clearVaultSession();
+  const handlePasswordOk = (mfaFromApi: boolean, username: string) => {
     setCurrentUser(username);
-    setChallengeToken(nextChallengeToken);
     setMfaEnabled(mfaFromApi);
     setSessionTimedOut(false);
     setSessionWarningVisible(false);
@@ -60,7 +54,6 @@ function App() {
 
   const handleMfaOk = () => {
     setMfaEnabled(true);
-    setChallengeToken("");
     setSessionTimedOut(false);
     setSessionWarningVisible(false);
     setScreen("dashboard");
@@ -83,10 +76,7 @@ function App() {
   };
 
   const handleManualLogout = () => {
-    clearVaultSession();
-    clearKey();
     setCurrentUser("");
-    setChallengeToken("");
     setMfaEnabled(false);
     setSessionWarningVisible(false);
     setSessionTimedOut(false);
@@ -103,10 +93,7 @@ function App() {
   };
 
   const handleSessionTimeout = () => {
-    clearVaultSession();
-    clearKey();
     setCurrentUser("");
-    setChallengeToken("");
     setMfaEnabled(false);
     setSessionWarningVisible(false);
     setSessionTimedOut(true);
@@ -181,7 +168,6 @@ function App() {
         <div className="min-h-screen flex items-center justify-center">
           <MFAVerify
             username={currentUser}
-            challengeToken={challengeToken}
             enrolled={mfaEnabled}
             onMfaOk={handleMfaOk}
           />
