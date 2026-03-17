@@ -9,13 +9,24 @@ Provide actionable security visibility and incident response evidence.
 - Auth and MFA events
 - Vault CRUD event logs (without plaintext secret data)
 
+## Current Verified Findings
+- Live auth routes are reachable and CORS is configured for the Amplify origin.
+- Live vault save/list/decrypt flows are working through API Gateway + Lambda.
+- March 17, 2026 live smoke validation now passes end-to-end for vault save/list/delete after the live Lambda delete hotfix.
+- Public `GET /vault/items/{id}` still returns `404` during live probing because the route is absent from API Gateway.
+- CloudWatch log group `/aws/lambda/SaveSecurityPassCredential` exists and retention is set to `3 months`.
+- CloudWatch alarm `nk8-SaveSecurityPassCredential-Errors` is configured for Lambda `Errors >= 1` over `1 minute`.
+- CloudWatch alarm `nk8-SaveSecurityPassCredential-Throttles` is configured for Lambda `Throttles >= 1` over `1 minute`.
+- SNS topic `nk8-security-alerts` is attached to both alarms and the email subscription is confirmed.
+- The current live bundle inspection shows no legacy `/credentials` helper or old endpoint string in the deployed frontend bundle.
+
 ## Alert Matrix
 | Alert | Trigger | Threshold | Action |
 | --- | --- | --- | --- |
-| Auth failures spike | Failed login count | > X failures in Y minutes | Investigate source IP/user pattern |
-| MFA failures spike | Failed MFA verifies | > X failures in Y minutes | Lock account policy / review |
-| API error rate | 5xx count | > X in Y minutes | Check Lambda/API health |
-| Unauthorized access | 401/403 anomalies | sustained deviation | Validate IAM/CORS/auth logic |
+| SaveSecurityPassCredential errors | Lambda `Errors` metric | `>= 1` in `1 minute` | SNS topic `nk8-security-alerts` |
+| SaveSecurityPassCredential throttles | Lambda `Throttles` metric | `>= 1` in `1 minute` | SNS topic `nk8-security-alerts` |
+| Missing item route parity | Public `GET /vault/items/{id}` returns `404` | Not currently alarmed | API Gateway follow-up |
+| Vault auth/data-scope gap | Route lacks authorizer or returns cross-user rows | Not currently alarmed | Backend hardening follow-up |
 
 ## Incident Workflow
 1. Detect alert.
@@ -30,7 +41,12 @@ Provide actionable security visibility and incident response evidence.
 - Release-level: audit and retention verification
 
 ## Evidence to Capture
-- CloudWatch dashboard screenshot
-- Alarm definitions screenshot
-- One sample alert and remediation note
-- Log retention policy screenshot
+- CloudWatch alarms list screenshot showing `Errors` and `Throttles`
+- SNS subscription screenshot showing `nk8-security-alerts` email endpoint as `Confirmed`
+- Log retention policy screenshot for `/aws/lambda/SaveSecurityPassCredential`
+- `artifacts/nk/live-endpoint-check.json`
+- `artifacts/nk/live-bundle-inspection.txt`
+
+## Remaining Monitoring Gaps
+- No API Gateway alarm or dashboard has been added yet.
+- Monitoring evidence is centered on the vault Lambda; broader API/auth alert coverage can be added later if the rubric requires it.

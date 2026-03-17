@@ -8,6 +8,14 @@ Deploy frontend + backend to public HTTPS with repeatable steps.
 - Backend: API Gateway + Lambda + DynamoDB
 - TLS: HTTPS on Amplify/API Gateway invoke URL; ACM only required for custom domains
 
+## Current Live Deployment
+- Verification date: `2026-03-17`
+- Amplify app: `https://main.d18bgjfq8i2fkv.amplifyapp.com`
+- API Gateway stage: `https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod`
+- Live auth + MFA flow works from the Amplify-hosted frontend.
+- Live vault save/list/decrypt/delete smoke checks pass against the live API after the March 17, 2026 Lambda hotfix.
+- The currently observed live bundle is `/assets/index-1ELDpQIp.js` from the Amplify app HTML.
+
 ## Pre-Deployment Inputs
 - AWS account with permissions for API Gateway, Lambda, DynamoDB, IAM, ACM, CloudWatch.
 - Frontend build config committed at repo root: `amplify.yml` (monorepo app root = `frontend`)
@@ -42,10 +50,21 @@ Deploy frontend + backend to public HTTPS with repeatable steps.
      -VaultApiBase "https://<api-id>.execute-api.<region>.amazonaws.com/prod" `
      -AuthApiBase "https://<api-id>.execute-api.<region>.amazonaws.com/prod" `
      -CheckAuthRoutes `
-     -Origin "https://<amplify-app-domain>"
+     -Origin "https://<amplify-app-domain>" `
+     -SmokeVaultCrud `
+     -EvidenceOutputPath ".\artifacts\nk\live-endpoint-check.json"
    ```
-5. Smoke test from laptop and phone on Amplify URL:
+5. Verify the built frontend no longer contains legacy plaintext sync references:
+   ```powershell
+   pwsh .\scripts\ops\assert-no-legacy-cloud-save.ps1
+   ```
+6. Smoke test from laptop and phone on Amplify URL:
    - Register -> Login -> MFA -> Vault Save -> Refresh -> Decrypt -> Delete
+
+## Current Known Deployment Issue
+- The March 17, 2026 smoke run now passes for save/list/delete after the live Lambda delete hotfix; see `artifacts/nk/live-endpoint-check.json`.
+- Public `GET /vault/items/{id}` is still absent from API Gateway, so the live API contract does not fully match the local mock/OpenAPI surface.
+- Broader live security follow-up remains: vault routes appear to have no authorizer, `GET /vault/items` still returns all rows, and `POST /vault/items` still trusts client-supplied `userId`.
 
 ## Optional Custom-Domain Path
 Use only if Route 53/domain features are available in account:
@@ -63,5 +82,8 @@ Use only if Route 53/domain features are available in account:
 - Amplify successful deploy screenshot (app URL visible)
 - API Gateway routes screenshot showing auth + vault CRUD
 - CORS configuration screenshot for API routes
-- Endpoint checker output screenshot (`check-endpoints.ps1`)
+- Endpoint checker output screenshot (`check-endpoints.ps1`, including `-SmokeVaultCrud`)
+- `assert-no-legacy-cloud-save.ps1` output
+- `artifacts/nk/live-bundle-inspection.txt`
+- `artifacts/nk/local-bundle-inspection.txt`
 - End-to-end demo screenshots on two devices
