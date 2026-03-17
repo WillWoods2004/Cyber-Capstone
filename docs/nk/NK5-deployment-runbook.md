@@ -9,12 +9,12 @@ Deploy frontend + backend to public HTTPS with repeatable steps.
 - TLS: HTTPS on Amplify/API Gateway invoke URL; ACM only required for custom domains
 
 ## Current Live Deployment
-- Verification date: `2026-03-16`
+- Verification date: `2026-03-17`
 - Amplify app: `https://main.d18bgjfq8i2fkv.amplifyapp.com`
 - API Gateway stage: `https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod`
 - Live auth + MFA flow works from the Amplify-hosted frontend.
-- Live vault save/list/decrypt work from the Amplify-hosted frontend.
-- The currently observed live bundle is `/assets/index-DhK_2DO9.js` from the Amplify app HTML.
+- Live vault save/list/decrypt/delete smoke checks pass against the live API after the March 17, 2026 Lambda hotfix.
+- The currently observed live bundle is `/assets/index-1ELDpQIp.js` from the Amplify app HTML.
 
 ## Pre-Deployment Inputs
 - AWS account with permissions for API Gateway, Lambda, DynamoDB, IAM, ACM, CloudWatch.
@@ -62,8 +62,9 @@ Deploy frontend + backend to public HTTPS with repeatable steps.
    - Register -> Login -> MFA -> Vault Save -> Refresh -> Decrypt -> Delete
 
 ## Current Known Deployment Issue
-- The live vault delete route returns `204`, but follow-up verification still sees the deleted row on the API list call. Treat vault delete as a cloud-backend follow-up item until the Lambda/API behavior is corrected and re-validated.
-- The live Amplify bundle still includes the legacy plaintext `/credentials` helper pointing at `https://5y6lvgdx08.execute-api.us-east-1.amazonaws.com/prod`. The repo is fixed locally, but the live frontend must be rebuilt/redeployed before production matches the repo.
+- The March 17, 2026 smoke run now passes for save/list/delete after the live Lambda delete hotfix; see `artifacts/nk/live-endpoint-check.json`.
+- Public `GET /vault/items/{id}` is still absent from API Gateway, so the live API contract does not fully match the local mock/OpenAPI surface.
+- Broader live security follow-up remains: vault routes appear to have no authorizer, `GET /vault/items` still returns all rows, and `POST /vault/items` still trusts client-supplied `userId`.
 
 ## Optional Custom-Domain Path
 Use only if Route 53/domain features are available in account:

@@ -25,14 +25,15 @@ Implement secure auth + vault logic with client-side cryptography and safe API c
 - Save item from client vault and confirm `ct/iv/tag` appear in UI visualizer.
 - Confirm decrypt action occurs client-side and reveals plaintext only after decrypt.
 - Confirm API list endpoint returns ciphertext items only.
-- Confirm the frontend source/bundle no longer contains `saveCredentialToCloud` or `/credentials` references before release.
+- Confirm the frontend source/bundle no longer contains `saveCredentialToCloud` or `/credentials` references before release. Pass for the current live bundle on 2026-03-17.
 
 ## Current Deployment Note
-- The repo branch is fixed, but the currently deployed Amplify bundle still contains the legacy plaintext endpoint string.
+- Amplify was redeployed before the March 17, 2026 live validation pass.
+- The current live bundle inspection shows deployed asset `/assets/index-1ELDpQIp.js` and confirms `OLD_HELPER_PRESENT=False` and `OLD_ENDPOINT_PRESENT=False`.
 - Evidence: `artifacts/nk/live-bundle-inspection.txt` and `artifacts/nk/local-bundle-inspection.txt`
-- Do not claim end-to-end ciphertext-only handling for the live frontend until Amplify is rebuilt from the remediated code.
+- The remaining live security gap is server-side: vault routes appear to have no authorizer, `GET /vault/items` returns all rows, and `POST /vault/items` still trusts client-supplied `userId`.
 
 ## Remaining Actions (if needed)
+- Coordinate backend auth/row-scoping hardening with the current frontend contract before release.
 - Add lint and SAST outputs into CI artifacts for merge gates.
-- Redeploy Amplify from the remediated branch and retain bundle-inspection evidence.
 - Add explicit security review sign-off note per release.
