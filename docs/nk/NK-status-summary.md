@@ -1,11 +1,12 @@
 # NK Status Summary
 
-This summary reflects what is currently verified from repository artifacts, local execution, and live cloud validation completed on 2026-03-16 (local) / 2026-03-17 UTC.
+This summary reflects what is currently verified from repository artifacts, local execution, and live cloud validation completed on 2026-03-17. All material cloud changes referenced below were performed directly in live AWS during the March 17, 2026 validation session.
 
 ## Implemented and Verified
 - NK1 secure schema rationale and data model are documented.
 - NK2 secure code implementation is mapped to the frontend crypto flow and API contract.
 - NK2 repo code has been remediated to remove the legacy plaintext `/credentials` sync helper from the client vault flow.
+- The current live Amplify bundle no longer contains the legacy plaintext helper or old endpoint string.
 - NK3 CI pipeline and audit tooling are committed and the current `main` branch builds/tests cleanly.
 - NK3 now includes a regression guard script that fails CI if the legacy plaintext cloud-save helper is reintroduced.
 - Fresh local audit artifacts now show `0` known vulnerabilities in `frontend`, `nk/api`, and `nk/sdk` after lockfile remediation and reinstall.
@@ -23,23 +24,27 @@ This summary reflects what is currently verified from repository artifacts, loca
 - Client-side vault encryption is working in-browser.
 - Live vault `POST /vault/items` succeeds.
 - Live vault `GET /vault/items` succeeds.
+- Live vault `DELETE /vault/items/{id}` now succeeds end to end after the March 17, 2026 Lambda hotfix.
 - Live decrypt flow succeeds after retrieving ciphertext from the cloud API.
 - CORS allows the Amplify app origin on auth and vault routes.
+- `artifacts/nk/live-endpoint-check.json` reports `passed=true` with smoke item id `nk-smoke-9902044c`.
+- `artifacts/nk/live-bundle-inspection.txt` shows deployed asset `/assets/index-1ELDpQIp.js`, `OLD_HELPER_PRESENT=False`, and `OLD_ENDPOINT_PRESENT=False`.
 
-## Additional Diagnostics Completed
-- The public API returned `404` for `GET /vault/items/{id}` during live probing, even though the local mock API/OpenAPI spec exposes that route.
-- The public API returned `204` for `DELETE /vault/items/{id}`, but the same id still appeared in `GET /vault/items` after repeated checks and after a 10-second wait.
-- The currently deployed Amplify bundle (`/assets/index-DhK_2DO9.js`) contains both:
-  - the current vault API base `https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod`
-  - the legacy plaintext sync endpoint `https://5y6lvgdx08.execute-api.us-east-1.amazonaws.com/prod/credentials`
+## Cloud Validation Completed
+- API Gateway `SecurityPassAPI (y1o1g8ogfh)` exposes `GET /vault/items`, `POST /vault/items`, and `DELETE /vault/items/{id}`; `GET /vault/items/{id}` is not currently deployed.
+- Live Lambda `SaveSecurityPassCredential` delete logic was fixed in AWS to page through scan results when locating `credentialId` before delete.
+- DynamoDB tables `SecurityPassCredentials` and `SecurityPassUsers` now have PITR enabled.
+- AWS Backup jobs completed for both tables and a restore drill completed successfully to `SecurityPassCredentials-restore-test-2026-03-17`.
+- CloudWatch log group `/aws/lambda/SaveSecurityPassCredential` exists and retention is set to `3 months`.
+- CloudWatch alarms `nk8-SaveSecurityPassCredential-Errors` and `nk8-SaveSecurityPassCredential-Throttles` exist, target SNS topic `nk8-security-alerts`, and the email subscription is confirmed.
 
 ## Remaining NK Work
-- NK4: redeploy the frontend bundle without the legacy plaintext helper, then rerun live save/decrypt/delete validation and capture final screenshots/video.
-- NK6: backup/restore procedure is documented, but PITR/restore-drill evidence is still missing.
-- NK7: compliance checklist is partially filled, but IAM/logging/backup proof still needs AWS screenshots/exports.
-- NK8: monitoring playbook is defined, but CloudWatch alarms/dashboard/log-retention evidence is still missing.
-- AWS-authenticated evidence collection was not possible from this terminal session because no AWS CLI/SDK profile or environment credentials were available.
+- NK7 is not fully closed because `SecurityPassLambdaRole` appears to use `AmazonDynamoDBFullAccess` rather than table-scoped least privilege.
+- For a true end-to-end security closure, vault routes still need authenticated user enforcement and server-side row scoping.
+- Final submission packaging still needs the AWS screenshots/export set and any required demo recording.
 
 ## Current Known Issue
-- Live `DELETE /vault/items/{id}` returns `204`, but the repo smoke script still sees the deleted row on the follow-up list call. This is a cloud-backend issue still pending isolation.
-- The live Amplify build still includes the legacy plaintext `/credentials` helper. The repo fix exists locally on this branch, but the live frontend must be rebuilt/redeployed before the ciphertext-only claim is fully true end to end.
+- Public `GET /vault/items/{id}` still returns `404` because the route is missing from API Gateway.
+- Vault routes appear to have no authorizer attached on the live API.
+- Live `GET /vault/items` still scans/returns all table rows and the current frontend filters by `meta.userId` client-side.
+- Live `POST /vault/items` still trusts client-supplied `userId`, so backend-side data ownership enforcement remains incomplete.
