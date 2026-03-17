@@ -3,7 +3,9 @@ param(
   [string]$AuthApiBase = "",
   [string]$Origin = "",
   [switch]$CheckAuthRoutes,
-  [switch]$CheckVaultHealth
+  [switch]$CheckVaultHealth,
+  [switch]$SmokeVaultCrud,
+  [string]$CrudUserId = "nk-smoke-user"
 )
 
 $ErrorActionPreference = "Continue"
@@ -45,18 +47,46 @@ function Invoke-Probe {
     return [pscustomobject]@{
       Status = [int]$res.StatusCode
       Headers = $res.Headers
+      Content = [string]$res.Content
     }
   } catch {
     if ($_.Exception.Response) {
+      $content = ""
+      try {
+        $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+        $content = $reader.ReadToEnd()
+      } catch {
+        $content = ""
+      }
+
       return [pscustomobject]@{
         Status = [int]$_.Exception.Response.StatusCode
         Headers = $_.Exception.Response.Headers
+        Content = $content
       }
     }
     return [pscustomobject]@{
       Status = 0
       Headers = @{}
+      Content = ""
     }
+  }
+}
+
+function ConvertFrom-JsonSafe {
+  param(
+    [string]$Value,
+    $Fallback = $null
+  )
+
+  if (-not $Value -or $Value.Trim().Length -eq 0) {
+    return $Fallback
+  }
+
+  try {
+    return $Value | ConvertFrom-Json
+  } catch {
+    return $Fallback
   }
 }
 
@@ -134,6 +164,121 @@ function Test-CorsPreflight {
   return $ok
 }
 
+function New-SmokeCipherPayload {
+  param(
+    [Parameter(Mandatory = $true)][string]$UserId,
+    [Parameter(Mandatory = $true)][string]$ItemId
+  )
+
+  $ctBytes = [System.Text.Encoding]::UTF8.GetBytes("nk-smoke-ct")
+  $ivBytes = 0..11
+  $tagBytes = 0..15
+
+  return @{
+    id = $ItemId
+    ct = [Convert]::ToBase64String($ctBytes)
+    iv = [Convert]::ToBase64String([byte[]]$ivBytes)
+    tag = [Convert]::ToBase64String([byte[]]$tagBytes)
+    meta = @{
+      userId = $UserId
+      site = "nk-smoke.example"
+      login = "nk-smoke"
+      label = "nk smoke"
+      createdAt = [DateTime]::UtcNow.ToString("o")
+    }
+  } | ConvertTo-Json -Depth 5 -Compress
+}
+
+function Test-VaultCrud {
+  param(
+    [Parameter(Mandatory = $true)][string]$VaultBase,
+    [Parameter(Mandatory = $true)][string]$UserId
+  )
+
+  $itemId = "nk-smoke-" + [Guid]::NewGuid().ToString("N").Substring(0, 8)
+  $body = New-SmokeCipherPayload -UserId $UserId -ItemId $itemId
+
+  $postProbe = Invoke-Probe -Method "POST" -Url "$VaultBase/vault/items" -Body $body
+  $postPayload = ConvertFrom-JsonSafe -Value $postProbe.Content -Fallback @{}
+  $postOk = (($postProbe.Status -eq 200) -or ($postProbe.Status -eq 201)) -and ($postPayload.id -eq $itemId)
+
+  if ($postOk) {
+    Write-Host "[PASS] Vault smoke POST -> $($postProbe.Status) created id $itemId"
+  } else {
+    Write-Host "[FAIL] Vault smoke POST -> $($postProbe.Status) response=$($postProbe.Content)"
+    return $false
+  }
+
+  $listProbe = Invoke-Probe -Method "GET" -Url "$VaultBase/vault/items"
+  $listPayload = ConvertFrom-JsonSafe -Value $listProbe.Content -Fallback @{}
+  $items = @()
+  if ($listPayload -is [System.Array]) {
+    $items = $listPayload
+  } elseif ($null -ne $listPayload.items) {
+    $items = @($listPayload.items)
+  }
+
+  $found = $false
+  foreach ($item in $items) {
+    if ($item.id -eq $itemId) {
+      $found = $true
+      break
+    }
+  }
+
+  if ($listProbe.Status -eq 200 -and $found) {
+    Write-Host "[PASS] Vault smoke GET -> located id $itemId"
+  } else {
+    Write-Host "[FAIL] Vault smoke GET -> $($listProbe.Status) located=$found response=$($listProbe.Content)"
+    return $false
+  }
+
+  $deleteProbe = Invoke-Probe -Method "DELETE" -Url "$VaultBase/vault/items/$itemId"
+  $deleteOk = ($deleteProbe.Status -eq 200) -or ($deleteProbe.Status -eq 204)
+
+  if ($deleteOk) {
+    Write-Host "[PASS] Vault smoke DELETE -> $($deleteProbe.Status) removed id $itemId"
+  } else {
+    Write-Host "[FAIL] Vault smoke DELETE -> $($deleteProbe.Status) response=$($deleteProbe.Content)"
+    return $false
+  }
+
+  $removed = $false
+  for ($i = 0; $i -lt 3; $i++) {
+    Start-Sleep -Milliseconds 500
+    $verifyProbe = Invoke-Probe -Method "GET" -Url "$VaultBase/vault/items"
+    $verifyPayload = ConvertFrom-JsonSafe -Value $verifyProbe.Content -Fallback @{}
+    $verifyItems = @()
+    if ($verifyPayload -is [System.Array]) {
+      $verifyItems = $verifyPayload
+    } elseif ($null -ne $verifyPayload.items) {
+      $verifyItems = @($verifyPayload.items)
+    }
+
+    $match = $false
+    foreach ($item in $verifyItems) {
+      if ($item.id -eq $itemId) {
+        $match = $true
+        break
+      }
+    }
+
+    if (-not $match) {
+      $removed = $true
+      break
+    }
+  }
+
+  if ($removed) {
+    Write-Host "[PASS] Vault smoke verify delete -> id $itemId no longer listed"
+  } else {
+    Write-Host "[FAIL] Vault smoke verify delete -> id $itemId still present after delete"
+    return $false
+  }
+
+  return $true
+}
+
 $vaultBase = Normalize-Base $VaultApiBase
 $authBase = Normalize-Base $AuthApiBase
 
@@ -163,6 +308,10 @@ if ($Origin -and $Origin.Trim().Length -gt 0) {
     $ok = (Test-CorsPreflight -Name "MFA setup" -Url "$authBase/mfa/setup" -RequestedMethod "POST" -TargetOrigin $Origin) -and $ok
     $ok = (Test-CorsPreflight -Name "MFA verify" -Url "$authBase/mfa/verify" -RequestedMethod "POST" -TargetOrigin $Origin) -and $ok
   }
+}
+
+if ($SmokeVaultCrud) {
+  $ok = (Test-VaultCrud -VaultBase $vaultBase -UserId $CrudUserId) -and $ok
 }
 
 if (-not $ok) {

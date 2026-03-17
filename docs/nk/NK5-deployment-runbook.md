@@ -8,6 +8,13 @@ Deploy frontend + backend to public HTTPS with repeatable steps.
 - Backend: API Gateway + Lambda + DynamoDB
 - TLS: HTTPS on Amplify/API Gateway invoke URL; ACM only required for custom domains
 
+## Current Live Deployment
+- Verification date: `2026-03-16`
+- Amplify app: `https://main.d18bgjfq8i2fkv.amplifyapp.com`
+- API Gateway stage: `https://y1o1g8ogfh.execute-api.us-east-1.amazonaws.com/prod`
+- Live auth + MFA flow works from the Amplify-hosted frontend.
+- Live vault save/list/decrypt work from the Amplify-hosted frontend.
+
 ## Pre-Deployment Inputs
 - AWS account with permissions for API Gateway, Lambda, DynamoDB, IAM, ACM, CloudWatch.
 - Frontend build config committed at repo root: `amplify.yml` (monorepo app root = `frontend`)
@@ -42,10 +49,14 @@ Deploy frontend + backend to public HTTPS with repeatable steps.
      -VaultApiBase "https://<api-id>.execute-api.<region>.amazonaws.com/prod" `
      -AuthApiBase "https://<api-id>.execute-api.<region>.amazonaws.com/prod" `
      -CheckAuthRoutes `
-     -Origin "https://<amplify-app-domain>"
+     -Origin "https://<amplify-app-domain>" `
+     -SmokeVaultCrud
    ```
 5. Smoke test from laptop and phone on Amplify URL:
    - Register -> Login -> MFA -> Vault Save -> Refresh -> Decrypt -> Delete
+
+## Current Known Deployment Issue
+- The live vault delete route returns `204`, but follow-up verification still sees the deleted row on the API list call. Treat vault delete as a cloud-backend follow-up item until the Lambda/API behavior is corrected and re-validated.
 
 ## Optional Custom-Domain Path
 Use only if Route 53/domain features are available in account:
@@ -63,5 +74,5 @@ Use only if Route 53/domain features are available in account:
 - Amplify successful deploy screenshot (app URL visible)
 - API Gateway routes screenshot showing auth + vault CRUD
 - CORS configuration screenshot for API routes
-- Endpoint checker output screenshot (`check-endpoints.ps1`)
+- Endpoint checker output screenshot (`check-endpoints.ps1`, including `-SmokeVaultCrud`)
 - End-to-end demo screenshots on two devices

@@ -90,7 +90,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\ops\check-endpoints.ps1 `
   -VaultApiBase "https://<api-id>.execute-api.<region>.amazonaws.com/prod" `
   -AuthApiBase "https://<api-id>.execute-api.<region>.amazonaws.com/prod" `
   -CheckAuthRoutes `
-  -Origin "https://<amplify-app-domain>"
+  -Origin "https://<amplify-app-domain>" `
+  -SmokeVaultCrud
 ```
 
 Add `-CheckVaultHealth` when validating the local mock API (`http://localhost:8080`).

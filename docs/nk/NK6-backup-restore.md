@@ -3,6 +3,11 @@
 ## Objective
 Define and prove recoverability for critical data.
 
+## Current Status
+- Procedure is documented in repo.
+- Live PITR/backup/restore evidence has not yet been attached.
+- This item remains open until a restore drill is executed against the AWS tables and the result is captured.
+
 ## Backup Scope
 - DynamoDB tables:
   - users/auth data
