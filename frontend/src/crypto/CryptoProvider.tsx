@@ -40,7 +40,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify(blob),
         });
 
-        // ✅ Improved error handling (safe)
+       
         if (!res.ok) {
           const errText = await res.text().catch(() => "");
           throw new Error(`Store failed: ${res.status}${errText ? ` - ${errText}` : ""}`);
@@ -61,7 +61,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
         const blob = await encryptEntry(plaintext, keyRef.current, meta);
 
-        // ✅ Debug log (does NOT affect functionality)
+        
         console.log("Sending blob:", blob);
 
         const res = await fetch(`${VAULT_API_BASE}/vault/items`, {
@@ -70,7 +70,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify(blob),
         });
 
-        // ✅ Improved error handling (safe)
+       
         if (!res.ok) {
           const errText = await res.text().catch(() => "");
           throw new Error(`Store failed: ${res.status}${errText ? ` - ${errText}` : ""}`);
