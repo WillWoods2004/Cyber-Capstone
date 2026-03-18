@@ -80,6 +80,7 @@ export default function Dashboard({
                 <div className="grid-col-1">
                   <QuickActions
                     onGeneratePassword={() => setActiveView("generator")}
+                    onAddPassword={() => setActiveView("clientVault")}
                   />
                 </div>
               </div>
