@@ -106,8 +106,12 @@ export default function Dashboard({
               <h2 className="dashboard-title">All Passwords</h2>
               <p className="dashboard-subtitle">Manage your stored passwords</p>
 
-              <div className="client-vault-wrapper" style={{ marginTop: "20px" }}>
-                <ClientVault currentUser={username} />
+              <div className="settings-card" style={{ marginTop: "20px" }}>
+                <h3 className="settings-section-title">Saved Passwords</h3>
+                <p className="settings-section-subtitle">
+                  Saved passwords will appear here. Use Client Vault to create,
+                  encrypt, and manage secure entries.
+                </p>
               </div>
             </div>
           )}
