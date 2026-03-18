@@ -79,6 +79,7 @@ export default function Dashboard({
                   <QuickActions
                     onGeneratePassword={() => setActiveView("generator")}
                     onAddPassword={() => setActiveView("clientVault")}
+                    onRunAudit={() => setActiveView("security")}
                   />
                 </div>
               </div>
