@@ -22,51 +22,83 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(
     () => ({
       isReady,
+
       async setMasterPassword(username, password) {
         keyRef.current = await deriveMasterKey(username, password);
         setReady(true);
       },
+
       async encryptOnly(plaintext, meta) {
         if (!keyRef.current) throw new Error("Key not set");
         return encryptEntry(plaintext, keyRef.current, meta);
       },
+
       async storeCipherBlob(blob) {
         const res = await fetch(`${VAULT_API_BASE}/vault/items`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(blob),
         });
-        if (!res.ok) throw new Error(`Store failed: ${res.status}`);
+
+        // ✅ Improved error handling (safe)
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          throw new Error(`Store failed: ${res.status}${errText ? ` - ${errText}` : ""}`);
+        }
+
         const payload = await res.json().catch(() => ({}));
         const id = payload?.id;
-        if (!id || typeof id !== "string") throw new Error("Store failed: missing id");
+
+        if (!id || typeof id !== "string") {
+          throw new Error("Store failed: missing id");
+        }
+
         return { id };
       },
+
       async encryptAndStore(plaintext, meta) {
         if (!keyRef.current) throw new Error("Key not set");
+
         const blob = await encryptEntry(plaintext, keyRef.current, meta);
+
+        // ✅ Debug log (does NOT affect functionality)
+        console.log("Sending blob:", blob);
+
         const res = await fetch(`${VAULT_API_BASE}/vault/items`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(blob),
         });
-        if (!res.ok) throw new Error(`Store failed: ${res.status}`);
+
+        // ✅ Improved error handling (safe)
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          throw new Error(`Store failed: ${res.status}${errText ? ` - ${errText}` : ""}`);
+        }
+
         const payload = await res.json().catch(() => ({}));
         const id = payload?.id;
-        if (!id || typeof id !== "string") throw new Error("Store failed: missing id");
+
+        if (!id || typeof id !== "string") {
+          throw new Error("Store failed: missing id");
+        }
+
         return { id };
       },
+
       async listItems() {
         const res = await fetch(`${VAULT_API_BASE}/vault/items`);
         if (!res.ok) throw new Error(`List failed: ${res.status}`);
-        const payload = await res.json(); // { items: [...] }
-        // API returns an object with 'items'; unwrap to array.
+
+        const payload = await res.json();
         return Array.isArray(payload) ? payload : (payload.items ?? []);
       },
+
       async decryptItem(item) {
         if (!keyRef.current) throw new Error("Key not set");
         return decryptEntry(item, keyRef.current);
       },
+
       clearKey() {
         keyRef.current = null;
         setReady(false);
@@ -83,4 +115,3 @@ export function useCrypto() {
   if (!ctx) throw new Error("useCrypto must be used within CryptoProvider");
   return ctx;
 }
-
