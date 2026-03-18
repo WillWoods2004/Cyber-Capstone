@@ -39,14 +39,6 @@ export default function Dashboard({
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
-  // Dashboard navigation handlers
-  const goToDashboard = () => setActiveView("dashboard");
-  const goToPasswords = () => setActiveView("passwords");
-  const goToGenerator = () => setActiveView("generator");
-  const goToClientVault = () => setActiveView("clientVault");
-  const goToSecurity = () => setActiveView("security");
-  const goToSettings = () => setActiveView("settings");
-
   return (
     <div className="dashboard-container">
       <Sidebar
@@ -59,8 +51,8 @@ export default function Dashboard({
 
       <div className="dashboard-main">
         <TopBar
-          onAddPassword={goToClientVault}
-          onGeneratePassword={goToGenerator}
+          onAddPassword={() => setActiveView("clientVault")}
+          onGeneratePassword={() => setActiveView("generator")}
         />
 
         <div className="dashboard-content">
@@ -73,39 +65,22 @@ export default function Dashboard({
                 </p>
               </div>
 
-              <StatsCards
-                onTotalPasswordsClick={goToPasswords}
-                onWeakPasswordsClick={goToSecurity}
-                onExpiringSoonClick={goToPasswords}
-                onSecurityScoreClick={goToSecurity}
-              />
+              <StatsCards />
 
               <div className="dashboard-grid">
                 <div className="grid-col-2">
-                  <RecentPasswords
-                    onViewAllClick={goToPasswords}
-                    onOpenVaultClick={goToClientVault}
-                  />
+                  <RecentPasswords />
                 </div>
-
                 <div className="grid-col-1">
                   <ActivityFeed />
                 </div>
-
                 <div className="grid-col-2">
-                  <SecurityOverview
-                    onViewDetailsClick={goToSecurity}
-                    onFixIssuesClick={goToSecurity}
-                  />
+                  <SecurityOverview />
                 </div>
-
                 <div className="grid-col-1">
                   <QuickActions
-                    onGeneratePassword={goToGenerator}
-                    onAddPassword={goToClientVault}
-                    onOpenVault={goToPasswords}
-                    onOpenSecurity={goToSecurity}
-                    onOpenSettings={goToSettings}
+                    onGeneratePassword={() => setActiveView("generator")}
+                    onAddPassword={() => setActiveView("clientVault")}
                   />
                 </div>
               </div>
@@ -115,9 +90,6 @@ export default function Dashboard({
           {activeView === "generator" && (
             <div className="generator-page">
               <h2 className="dashboard-title">Password Generator</h2>
-              <p className="dashboard-subtitle">
-                Create strong passwords for your accounts
-              </p>
               <div className="generator-wrapper">
                 <PasswordGenerator />
               </div>
@@ -126,10 +98,6 @@ export default function Dashboard({
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              <h2 className="dashboard-title">Client Vault</h2>
-              <p className="dashboard-subtitle">
-                Add and manage password entries for your vault
-              </p>
               <ClientVault currentUser={username} />
             </div>
           )}
@@ -138,33 +106,13 @@ export default function Dashboard({
             <div className="passwords-page">
               <h2 className="dashboard-title">All Passwords</h2>
               <p className="dashboard-subtitle">Manage your stored passwords</p>
-
-              <div style={{ marginTop: "1rem" }}>
-                <button className="panel-link" onClick={goToDashboard}>
-                  ← Back to Dashboard
-                </button>
-              </div>
             </div>
           )}
 
           {activeView === "security" && (
             <div className="security-page">
               <h2 className="dashboard-title">Security Center</h2>
-              <p className="dashboard-subtitle">
-                Review password strength and security issues
-              </p>
-
-              <div style={{ marginTop: "1rem", marginBottom: "1rem" }}>
-                <button className="panel-link" onClick={goToDashboard}>
-                  ← Back to Dashboard
-                </button>
-              </div>
-
-              <SecurityOverview
-                expanded={true}
-                onViewDetailsClick={goToSecurity}
-                onFixIssuesClick={goToSecurity}
-              />
+              <SecurityOverview expanded={true} />
             </div>
           )}
 
@@ -197,12 +145,6 @@ export default function Dashboard({
                     </button>
                   )}
                 </div>
-              </div>
-
-              <div style={{ marginTop: "1rem" }}>
-                <button className="panel-link" onClick={goToDashboard}>
-                  ← Back to Dashboard
-                </button>
               </div>
             </div>
           )}
