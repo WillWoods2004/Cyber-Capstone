@@ -1,8 +1,19 @@
 type QuickActionsProps = {
   onGeneratePassword: () => void;
+  onAddPassword?: () => void;
+  onRunAudit?: () => void;
 };
 
-export default function QuickActions({ onGeneratePassword }: QuickActionsProps) {
+export default function QuickActions({
+  onGeneratePassword,
+  onAddPassword,
+  onRunAudit,
+}: QuickActionsProps) {
+
+  const handleExport = () => {
+    alert("Export is disabled for security reasons. Use the Client Vault to manage your passwords.");
+  };
+
   return (
     <div className="panel">
       <div className="panel-header">
@@ -10,19 +21,34 @@ export default function QuickActions({ onGeneratePassword }: QuickActionsProps) 
       </div>
       <div className="panel-content">
         <div className="quick-actions-list">
-          <button className="quick-action-btn quick-action-primary">
+          <button
+            className="quick-action-btn quick-action-primary"
+            onClick={onAddPassword}
+          >
             <span>➕</span>
             <span>Add New Password</span>
           </button>
-          <button className="quick-action-btn" onClick={onGeneratePassword}>
+
+          <button
+            className="quick-action-btn"
+            onClick={onGeneratePassword}
+          >
             <span>🔑</span>
             <span>Generate Password</span>
           </button>
-          <button className="quick-action-btn">
+
+          <button
+            className="quick-action-btn"
+            onClick={handleExport}
+          >
             <span>📥</span>
             <span>Export Passwords</span>
           </button>
-          <button className="quick-action-btn">
+
+          <button
+            className="quick-action-btn"
+            onClick={onRunAudit}
+          >
             <span>🛡️</span>
             <span>Run Security Audit</span>
           </button>
