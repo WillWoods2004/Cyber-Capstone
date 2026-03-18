@@ -1,6 +1,5 @@
-// Front-End/frontend/src/components/PasswordGenerator.tsx
 import { useState } from "react";
-import { useCrypto } from "../crypto/CryptoProvider"; // add
+import { useCrypto } from "../crypto/CryptoProvider";
 
 type GeneratorOptions = {
   length: number;
@@ -8,6 +7,10 @@ type GeneratorOptions = {
   useUpper: boolean;
   useNumbers: boolean;
   useSymbols: boolean;
+};
+
+type PasswordGeneratorProps = {
+  currentUser: string;
 };
 
 const LOWER = "abcdefghijklmnopqrstuvwxyz";
@@ -32,7 +35,7 @@ function shuffle(chars: string[]): string[] {
   return chars;
 }
 
-const PasswordGenerator = () => {
+const PasswordGenerator = ({ currentUser }: PasswordGeneratorProps) => {
   const [options, setOptions] = useState<GeneratorOptions>({
     length: 16,
     useLower: true,
@@ -44,7 +47,7 @@ const PasswordGenerator = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const { encryptAndStore } = useCrypto(); // enable one-click save to vault
+  const { encryptAndStore } = useCrypto();
 
   const handleChange =
     (key: keyof GeneratorOptions) =>
@@ -74,15 +77,12 @@ const PasswordGenerator = () => {
 
     const length = Math.min(Math.max(options.length, 4), 64);
     const allChars = pools.join("");
-
     const chars: string[] = [];
 
-    // ensure at least one of each selected type (why: avoid missing a class)
     for (const pool of pools) {
       chars.push(pool[getRandomInt(pool.length)]);
     }
 
-    // fill the rest
     while (chars.length < length) {
       chars.push(allChars[getRandomInt(allChars.length)]);
     }
@@ -102,8 +102,10 @@ const PasswordGenerator = () => {
 
   const saveToVault = async () => {
     if (!password) return;
+
     try {
       await encryptAndStore(password, {
+        userId: currentUser,
         label: "generated",
         createdAt: new Date().toISOString(),
         length: options.length,
@@ -112,6 +114,7 @@ const PasswordGenerator = () => {
         numbers: options.useNumbers,
         symbols: options.useSymbols,
       });
+
       alert("Saved to vault.");
     } catch (e: any) {
       alert(`Save failed: ${e?.message ?? String(e)}`);
@@ -203,9 +206,7 @@ const PasswordGenerator = () => {
       <div className="pwgen-output">
         <span className="pwgen-output-label">Generated password</span>
         <div className="pwgen-output-box">
-          {password || (
-            <span className="pwgen-placeholder">Nothing yet…</span>
-          )}
+          {password || <span className="pwgen-placeholder">Nothing yet…</span>}
         </div>
       </div>
     </div>
