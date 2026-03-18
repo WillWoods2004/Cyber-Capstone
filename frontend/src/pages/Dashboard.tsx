@@ -102,9 +102,8 @@ export default function Dashboard({
           )}
 
           {activeView === "passwords" && (
-            <div className="passwords-page">
-              <h2 className="dashboard-title">All Passwords</h2>
-              <p className="dashboard-subtitle">Manage your stored passwords</p>
+            <div className="client-vault-wrapper">
+              <ClientVault currentUser={username} />
             </div>
           )}
 
