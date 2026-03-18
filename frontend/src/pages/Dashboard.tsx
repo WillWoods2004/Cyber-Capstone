@@ -1,5 +1,3 @@
-// frontend/src/pages/Dashboard.tsx
-
 import { useState } from "react";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
@@ -91,7 +89,7 @@ export default function Dashboard({
             <div className="generator-page">
               <h2 className="dashboard-title">Password Generator</h2>
               <div className="generator-wrapper">
-                <PasswordGenerator />
+                <PasswordGenerator currentUser={username} />
               </div>
             </div>
           )}
