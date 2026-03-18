@@ -214,8 +214,10 @@ export default function VaultPanel() {
     addLog("Encrypting plaintext in browser");
 
     try {
+      const savedAt = new Date().toISOString();
       const meta: Record<string, unknown> = {
-        createdAt: new Date().toISOString(),
+        createdAt: savedAt,
+        savedAt,
       };
 
       if (site.trim()) {
@@ -224,6 +226,7 @@ export default function VaultPanel() {
 
       if (login.trim()) {
         meta.login = login.trim();
+        meta.username = login.trim();
       }
 
       const blob = await encryptOnly(password, meta);

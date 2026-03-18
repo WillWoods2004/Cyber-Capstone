@@ -1,5 +1,3 @@
-// frontend/src/pages/Dashboard.tsx
-
 import { useState } from "react";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
@@ -80,6 +78,9 @@ export default function Dashboard({
                 <div className="grid-col-1">
                   <QuickActions
                     onGeneratePassword={() => setActiveView("generator")}
+                    onAddPassword={() => setActiveView("clientVault")}
+                    onExportPasswords={() => setActiveView("clientVault")}
+                    onRunAudit={() => setActiveView("security")}
                   />
                 </div>
               </div>
@@ -90,7 +91,7 @@ export default function Dashboard({
             <div className="generator-page">
               <h2 className="dashboard-title">Password Generator</h2>
               <div className="generator-wrapper">
-                <PasswordGenerator />
+                <PasswordGenerator currentUser={username} />
               </div>
             </div>
           )}
@@ -105,6 +106,14 @@ export default function Dashboard({
             <div className="passwords-page">
               <h2 className="dashboard-title">All Passwords</h2>
               <p className="dashboard-subtitle">Manage your stored passwords</p>
+
+              <div className="settings-card" style={{ marginTop: "20px" }}>
+                <h3 className="settings-section-title">Saved Passwords</h3>
+                <p className="settings-section-subtitle">
+                  Saved passwords will appear here. Use Client Vault to create,
+                  encrypt, and manage secure entries.
+                </p>
+              </div>
             </div>
           )}
 

@@ -1,14 +1,110 @@
+import { useEffect, useState } from "react";
+import { useCrypto } from "../crypto/CryptoProvider";
+import type { CipherBlob } from "../crypto/crypto";
+
+type Stats = {
+  total: number;
+  weak: number;
+  expiringSoon: number;
+  securityScore: number;
+};
+
+function isWeakPassword(password: string): boolean {
+  if (password.length < 8) return true;
+  const hasUpper   = /[A-Z]/.test(password);
+  const hasLower   = /[a-z]/.test(password);
+  const hasNumber  = /[0-9]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+  const strengthCount = [hasUpper, hasLower, hasNumber, hasSpecial].filter(Boolean).length;
+  return strengthCount < 3;
+}
+
+function isExpiringSoon(meta?: Record<string, unknown>): boolean {
+  if (!meta?.expiresAt) return false;
+  const expiry = new Date(meta.expiresAt as string).getTime();
+  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+  return expiry - Date.now() < thirtyDays && expiry > Date.now();
+}
+
+function calcSecurityScore(total: number, weak: number): number {
+  if (total === 0) return 100;
+  const strongRatio = (total - weak) / total;
+  return Math.round(strongRatio * 100);
+}
+
 export default function StatsCards() {
-  const stats = [
-    { label: "Total Passwords", value: "47", icon: "🔒", color: "stat-blue" },
-    { label: "Weak Passwords", value: "3", icon: "⚠️", color: "stat-orange" },
-    { label: "Expiring Soon", value: "5", icon: "⏰", color: "stat-yellow" },
-    { label: "Security Score", value: "87%", icon: "🛡️", color: "stat-green" },
+  const { listItems, decryptItem, isReady } = useCrypto();
+  const [stats, setStats]     = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    async function computeStats() {
+      setLoading(true);
+      try {
+        const items: CipherBlob[] = await listItems();
+
+        let weak = 0;
+        let expiringSoon = 0;
+
+        for (const item of items) {
+          try {
+            const plaintext = await decryptItem(item);
+            if (isWeakPassword(plaintext)) weak++;
+            if (isExpiringSoon(item.meta))  expiringSoon++;
+          } catch {
+            // skip items that fail to decrypt
+          }
+        }
+
+        const total = items.length;
+        setStats({
+          total,
+          weak,
+          expiringSoon,
+          securityScore: calcSecurityScore(total, weak),
+        });
+      } catch (err) {
+        console.error("StatsCards: failed to load vault stats", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    computeStats();
+  }, [isReady, listItems, decryptItem]);
+
+  const cards = [
+    {
+      label: "Total Passwords",
+      value: loading ? "—" : String(stats?.total ?? 0),
+      icon: "🔒",
+      color: "stat-blue",
+    },
+    {
+      label: "Weak Passwords",
+      value: loading ? "—" : String(stats?.weak ?? 0),
+      icon: "⚠️",
+      color: "stat-orange",
+    },
+    {
+      label: "Expiring Soon",
+      value: loading ? "—" : String(stats?.expiringSoon ?? 0),
+      icon: "⏰",
+      color: "stat-yellow",
+    },
+    {
+      label: "Security Score",
+      value: loading ? "—" : `${stats?.securityScore ?? 0}%`,
+      icon: "🛡️",
+      color: "stat-green",
+    },
   ];
 
   return (
     <div className="stats-grid">
-      {stats.map((stat, idx) => (
+      {cards.map((stat, idx) => (
         <div key={idx} className={`stat-card ${stat.color}`}>
           <div className="stat-header">
             <div className="stat-icon-wrapper">
