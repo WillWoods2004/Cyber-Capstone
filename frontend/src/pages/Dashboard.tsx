@@ -39,12 +39,6 @@ export default function Dashboard({
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
-  const goToDashboard = () => setActiveView("dashboard");
-  const goToPasswords = () => setActiveView("passwords");
-  const goToGenerator = () => setActiveView("generator");
-  const goToClientVault = () => setActiveView("clientVault");
-  const goToSecurity = () => setActiveView("security");
-
   return (
     <div className="dashboard-container">
       <Sidebar
@@ -57,8 +51,8 @@ export default function Dashboard({
 
       <div className="dashboard-main">
         <TopBar
-          onAddPassword={goToClientVault}
-          onGeneratePassword={goToGenerator}
+          onAddPassword={() => setActiveView("clientVault")}
+          onGeneratePassword={() => setActiveView("generator")}
         />
 
         <div className="dashboard-content">
@@ -77,17 +71,17 @@ export default function Dashboard({
                 <div className="grid-col-2">
                   <RecentPasswords />
                 </div>
-
                 <div className="grid-col-1">
                   <ActivityFeed />
                 </div>
-
                 <div className="grid-col-2">
                   <SecurityOverview />
                 </div>
-
                 <div className="grid-col-1">
-                  <QuickActions onGeneratePassword={goToGenerator} />
+                  <QuickActions
+                    onGeneratePassword={() => setActiveView("generator")}
+                    onAddPassword={() => setActiveView("clientVault")}
+                  />
                 </div>
               </div>
             </>
@@ -99,29 +93,12 @@ export default function Dashboard({
               <div className="generator-wrapper">
                 <PasswordGenerator />
               </div>
-
-              <div style={{ marginTop: "1rem" }}>
-                <button className="panel-link" onClick={goToDashboard}>
-                  ← Back to Dashboard
-                </button>
-              </div>
             </div>
           )}
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              <h2 className="dashboard-title">Client Vault</h2>
-              <p className="dashboard-subtitle">
-                Add and manage your stored passwords
-              </p>
-
               <ClientVault currentUser={username} />
-
-              <div style={{ marginTop: "1rem" }}>
-                <button className="panel-link" onClick={goToDashboard}>
-                  ← Back to Dashboard
-                </button>
-              </div>
             </div>
           )}
 
@@ -129,12 +106,6 @@ export default function Dashboard({
             <div className="passwords-page">
               <h2 className="dashboard-title">All Passwords</h2>
               <p className="dashboard-subtitle">Manage your stored passwords</p>
-
-              <div style={{ marginTop: "1rem" }}>
-                <button className="panel-link" onClick={goToDashboard}>
-                  ← Back to Dashboard
-                </button>
-              </div>
             </div>
           )}
 
@@ -142,12 +113,6 @@ export default function Dashboard({
             <div className="security-page">
               <h2 className="dashboard-title">Security Center</h2>
               <SecurityOverview expanded={true} />
-
-              <div style={{ marginTop: "1rem" }}>
-                <button className="panel-link" onClick={goToDashboard}>
-                  ← Back to Dashboard
-                </button>
-              </div>
             </div>
           )}
 
@@ -180,12 +145,6 @@ export default function Dashboard({
                     </button>
                   )}
                 </div>
-              </div>
-
-              <div style={{ marginTop: "1rem" }}>
-                <button className="panel-link" onClick={goToDashboard}>
-                  ← Back to Dashboard
-                </button>
               </div>
             </div>
           )}
