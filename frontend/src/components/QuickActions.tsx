@@ -11,7 +11,7 @@ export default function QuickActions({
 }: QuickActionsProps) {
 
   const handleExport = () => {
-    alert("Export is disabled for security reasons. Use the Client Vault to manage your passwords.");
+  window.open("clientVault");
   };
 
   return (
