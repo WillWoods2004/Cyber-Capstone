@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import StatsCards from "../components/StatsCards";
@@ -8,6 +8,7 @@ import SecurityOverview from "../components/SecurityOverview";
 import QuickActions from "../components/QuickActions";
 import PasswordGenerator from "../components/PasswordGenerator";
 import ClientVault from "./ClientVault";
+import { useCrypto } from "../crypto/CryptoProvider";
 
 type DashboardProps = {
   username: string;
@@ -24,6 +25,8 @@ type ActiveView =
   | "security"
   | "settings";
 
+const AUTO_LOCK_MS = 5 * 60 * 1000;
+
 export default function Dashboard({
   username,
   mfaEnabled,
@@ -34,6 +37,8 @@ export default function Dashboard({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
   const [vaultSearchQuery, setVaultSearchQuery] = useState("");
+  const { clearKey, isReady } = useCrypto();
+  const inactivityTimeoutRef = useRef<number | null>(null);
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
@@ -43,6 +48,51 @@ export default function Dashboard({
       setActiveView("clientVault");
     }
   };
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    const handleAutoLock = () => {
+      clearKey();
+      alert("Vault auto-locked after inactivity.");
+      onLogout?.();
+    };
+
+    const resetTimer = () => {
+      if (inactivityTimeoutRef.current) {
+        window.clearTimeout(inactivityTimeoutRef.current);
+      }
+
+      inactivityTimeoutRef.current = window.setTimeout(() => {
+        handleAutoLock();
+      }, AUTO_LOCK_MS);
+    };
+
+    const events: (keyof WindowEventMap)[] = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "scroll",
+      "touchstart",
+      "click",
+    ];
+
+    events.forEach((eventName) => {
+      window.addEventListener(eventName, resetTimer);
+    });
+
+    resetTimer();
+
+    return () => {
+      if (inactivityTimeoutRef.current) {
+        window.clearTimeout(inactivityTimeoutRef.current);
+      }
+
+      events.forEach((eventName) => {
+        window.removeEventListener(eventName, resetTimer);
+      });
+    };
+  }, [clearKey, isReady, onLogout]);
 
   return (
     <div className="dashboard-container">
