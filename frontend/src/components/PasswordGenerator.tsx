@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 
 type GeneratorOptions = {
@@ -35,7 +35,7 @@ function shuffle(chars: string[]): string[] {
   return chars;
 }
 
-const PasswordGenerator = ({ currentUser }: PasswordGeneratorProps) => {
+export default function PasswordGenerator({ currentUser }: PasswordGeneratorProps) {
   const [options, setOptions] = useState<GeneratorOptions>({
     length: 16,
     useLower: true,
@@ -46,8 +46,22 @@ const PasswordGenerator = ({ currentUser }: PasswordGeneratorProps) => {
 
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
 
   const { encryptAndStore } = useCrypto();
+  const clearClipboardTimeoutRef = useRef<number | null>(null);
+  const clearMessageTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (clearClipboardTimeoutRef.current) {
+        window.clearTimeout(clearClipboardTimeoutRef.current);
+      }
+      if (clearMessageTimeoutRef.current) {
+        window.clearTimeout(clearMessageTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleChange =
     (key: keyof GeneratorOptions) =>
@@ -62,6 +76,7 @@ const PasswordGenerator = ({ currentUser }: PasswordGeneratorProps) => {
 
   const generate = () => {
     setError("");
+    setCopyMessage("");
     const pools: string[] = [];
 
     if (options.useLower) pools.push(LOWER);
@@ -93,10 +108,35 @@ const PasswordGenerator = ({ currentUser }: PasswordGeneratorProps) => {
 
   const copyToClipboard = async () => {
     if (!password) return;
+
     try {
       await navigator.clipboard.writeText(password);
+      setCopyMessage("Copied. Clipboard will clear in 30 seconds.");
+
+      if (clearClipboardTimeoutRef.current) {
+        window.clearTimeout(clearClipboardTimeoutRef.current);
+      }
+
+      if (clearMessageTimeoutRef.current) {
+        window.clearTimeout(clearMessageTimeoutRef.current);
+      }
+
+      clearClipboardTimeoutRef.current = window.setTimeout(async () => {
+        try {
+          const currentClipboard = await navigator.clipboard.readText();
+          if (currentClipboard === password) {
+            await navigator.clipboard.writeText("");
+          }
+        } catch {
+          // ignore clipboard permission failures
+        }
+      }, 30000);
+
+      clearMessageTimeoutRef.current = window.setTimeout(() => {
+        setCopyMessage("Clipboard auto-cleared for security.");
+      }, 30000);
     } catch {
-      // clipboard not available
+      setCopyMessage("Clipboard access was not available.");
     }
   };
 
@@ -178,6 +218,7 @@ const PasswordGenerator = ({ currentUser }: PasswordGeneratorProps) => {
       </div>
 
       {error && <div className="pwgen-error">{error}</div>}
+      {copyMessage && <div className="pwgen-subtitle">{copyMessage}</div>}
 
       <div className="pwgen-actions">
         <button className="primary-btn" onClick={generate}>
@@ -211,6 +252,4 @@ const PasswordGenerator = ({ currentUser }: PasswordGeneratorProps) => {
       </div>
     </div>
   );
-};
-
-export default PasswordGenerator;
+}
