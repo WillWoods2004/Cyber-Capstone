@@ -1,133 +1,179 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
-
-type SecurityIssue = {
-  type: string;
-  count: number;
-  severity: "high" | "medium" | "low";
-};
 
 type SecurityOverviewProps = {
   expanded?: boolean;
 };
 
-function isWeak(password: string): boolean {
-  if (password.length < 8) return true;
-  const hasUpper   = /[A-Z]/.test(password);
-  const hasLower   = /[a-z]/.test(password);
-  const hasNumber  = /[0-9]/.test(password);
-  const hasSpecial = /[^A-Za-z0-9]/.test(password);
-  return [hasUpper, hasLower, hasNumber, hasSpecial].filter(Boolean).length < 3;
+type ScoredPassword = {
+  id: string;
+  label: string;
+  password: string;
+  score: number;
+  rating: string;
+};
+
+function scorePassword(password: string) {
+  let score = 0;
+
+  if (password.length >= 8) score += 20;
+  if (password.length >= 12) score += 20;
+  if (/[a-z]/.test(password)) score += 15;
+  if (/[A-Z]/.test(password)) score += 15;
+  if (/[0-9]/.test(password)) score += 15;
+  if (/[^A-Za-z0-9]/.test(password)) score += 15;
+
+  if (score >= 85) return { score, rating: "Strong" };
+  if (score >= 60) return { score, rating: "Moderate" };
+  return { score, rating: "Weak" };
 }
 
-function isOld(meta?: Record<string, unknown>): boolean {
-  if (!meta?.savedAt) return false;
-  const saved = new Date(meta.savedAt as string).getTime();
-  const ninetyDays = 90 * 24 * 60 * 60 * 1000;
-  return Date.now() - saved > ninetyDays;
-}
-
-export default function SecurityOverview({ expanded: _expanded = false }: SecurityOverviewProps) {
-  const { listItems, decryptItem, isReady } = useCrypto();
-  const [issues, setIssues]   = useState<SecurityIssue[]>([]);
-  const [score, setScore]     = useState<number>(100);
-  const [loading, setLoading] = useState(true);
+export default function SecurityOverview({
+  expanded = false,
+}: SecurityOverviewProps) {
+  const { isReady, listItems, decryptItem } = useCrypto();
+  const [items, setItems] = useState<ScoredPassword[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!isReady) return;
+    let mounted = true;
 
-    async function analyze() {
+    async function load() {
+      if (!isReady) {
+        setItems([]);
+        return;
+      }
+
       setLoading(true);
+      setError("");
+
       try {
-        const items: CipherBlob[] = await listItems();
-        const plaintexts: string[] = [];
+        const vaultItems: CipherBlob[] = await listItems();
+        const scored: ScoredPassword[] = [];
 
-        let weakCount = 0;
-        let oldCount  = 0;
-
-        for (const item of items) {
+        for (const item of vaultItems) {
           try {
             const plaintext = await decryptItem(item);
-            plaintexts.push(plaintext);
-            if (isWeak(plaintext)) weakCount++;
-            if (isOld(item.meta))  oldCount++;
+            const label =
+              typeof item.meta?.label === "string"
+                ? item.meta.label
+                : "Saved Entry";
+
+            const result = scorePassword(plaintext);
+
+            scored.push({
+              id: item.id ?? crypto.randomUUID(),
+              label,
+              password: plaintext,
+              score: result.score,
+              rating: result.rating,
+            });
           } catch {
-            // skip
+            // skip entries that cannot be decrypted with current key
           }
         }
 
-        const duplicateCount = plaintexts.length - new Set(plaintexts).size;
-
-        const found: SecurityIssue[] = [];
-        if (weakCount > 0)      found.push({ type: "Weak Password",           count: weakCount,      severity: "high" });
-        if (duplicateCount > 0) found.push({ type: "Duplicate Password",      count: duplicateCount, severity: "medium" });
-        if (oldCount > 0)       found.push({ type: "Old Password (>90 days)", count: oldCount,       severity: "low" });
-
-        setIssues(found);
-
-        const total = items.length || 1;
-        const deduction = (weakCount * 3 + duplicateCount * 2 + oldCount * 1) / total * 100;
-        setScore(Math.max(0, Math.round(100 - deduction)));
-      } catch (err) {
-        console.error("SecurityOverview: failed to analyze", err);
+        if (mounted) {
+          setItems(scored);
+        }
+      } catch (err: any) {
+        if (mounted) {
+          setError(err?.message ?? "Failed to load security data.");
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     }
 
-    analyze();
+    load();
+
+    return () => {
+      mounted = false;
+    };
   }, [isReady, listItems, decryptItem]);
 
-  const scoreColor = score >= 80 ? "#22c55e" : score >= 60 ? "#f59e0b" : "#ef4444";
+  const overallScore = useMemo(() => {
+    if (!items.length) return 0;
+    const total = items.reduce((sum, item) => sum + item.score, 0);
+    return Math.round(total / items.length);
+  }, [items]);
+
+  const overallRating =
+    overallScore >= 85 ? "Strong" : overallScore >= 60 ? "Moderate" : "Weak";
+
+  if (!expanded) {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <h3 className="panel-title">Security Overview</h3>
+        </div>
+        <div className="panel-content">
+          <p className="dashboard-subtitle">
+            Overall password health: <strong>{overallRating}</strong> ({overallScore}/100)
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <span className="panel-icon">🛡️</span>
-        <h3 className="panel-title">Security Overview</h3>
-      </div>
-      <div className="panel-content">
-        <div className="security-score-section">
-          <div className="security-score-header">
-            <span className="security-score-label">Overall Security Score</span>
-            <span className="security-score-value" style={{ color: scoreColor }}>
-              {loading ? "—" : `${score}%`}
-            </span>
-          </div>
-          <div className="security-progress-bar">
-            <div
-              className="security-progress-fill"
-              style={{ width: loading ? "0%" : `${score}%`, background: scoreColor }}
-            />
-          </div>
-        </div>
+    <div className="security-page">
+      <h2 className="dashboard-title">Security Center</h2>
+      <p className="dashboard-subtitle">
+        Review all saved passwords and their security ratings.
+      </p>
 
-        <div className="security-issues">
-          {loading && (
-            <p style={{ color: "#6b7280", fontSize: "0.85rem", padding: "0.5rem 0" }}>
-              Analyzing vault...
-            </p>
-          )}
-          {!loading && issues.length === 0 && (
-            <p style={{ color: "#22c55e", fontSize: "0.85rem", padding: "0.5rem 0" }}>
-              ✓ No security issues found.
-            </p>
-          )}
-          {issues.map((issue, idx) => (
-            <div key={idx} className="security-issue">
-              <div className="security-issue-left">
-                <span className={`security-severity severity-${issue.severity}`}>⚠️</span>
-                <div>
-                  <p className="security-issue-type">{issue.type}</p>
-                  <p className="security-issue-count">{issue.count} passwords affected</p>
-                </div>
-              </div>
-              <button className="security-fix-btn">Fix Now</button>
+      <div className="settings-card" style={{ marginBottom: "20px" }}>
+        <h3 className="settings-section-title">Overall Security Score</h3>
+        <p className="settings-section-subtitle">
+          {items.length
+            ? `${overallScore}/100 — ${overallRating}`
+            : "No saved passwords available to score."}
+        </p>
+      </div>
+
+      {loading && (
+        <div className="settings-card">
+          <p className="settings-section-subtitle">Loading security analysis...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="settings-card">
+          <p className="settings-section-subtitle">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && items.length === 0 && (
+        <div className="settings-card">
+          <p className="settings-section-subtitle">
+            No decryptable passwords were found for this session.
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && items.length > 0 && (
+        <div className="settings-layout">
+          {items.map((item) => (
+            <div className="settings-card" key={item.id}>
+              <h3 className="settings-section-title">{item.label}</h3>
+              <p className="settings-section-subtitle">
+                Rating: <strong>{item.rating}</strong>
+              </p>
+              <p className="settings-section-subtitle">
+                Score: <strong>{item.score}/100</strong>
+              </p>
+              <p className="settings-section-subtitle">
+                Length: <strong>{item.password.length}</strong>
+              </p>
             </div>
           ))}
         </div>
-      </div>
+      )}
     </div>
   );
 }
