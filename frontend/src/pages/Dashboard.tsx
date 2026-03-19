@@ -71,7 +71,7 @@ export default function Dashboard({
                 </p>
               </div>
 
-              <StatsCards />
+              <StatsCards currentUser={username} />
 
               <div className="dashboard-grid">
                 <div className="grid-col-2">
@@ -105,10 +105,7 @@ export default function Dashboard({
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              <ClientVault
-                currentUser={username}
-                searchQuery={vaultSearchQuery}
-              />
+              <ClientVault currentUser={username} searchQuery={vaultSearchQuery} />
             </div>
           )}
 
