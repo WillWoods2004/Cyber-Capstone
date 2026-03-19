@@ -5,6 +5,7 @@ import { VAULT_API_BASE } from "../config/api";
 
 type VaultPanelProps = {
   currentUser: string;
+  searchQuery?: string;
 };
 
 type Row = CipherBlob & { _idx: number };
@@ -98,7 +99,10 @@ function shannonEntropy(text?: string | null): number {
   return entropy;
 }
 
-export default function VaultPanel({ currentUser }: VaultPanelProps) {
+export default function VaultPanel({
+  currentUser,
+  searchQuery = "",
+}: VaultPanelProps) {
   const { isReady, encryptOnly, storeCipherBlob, listItems, decryptItem } = useCrypto();
   const [site, setSite] = useState("");
   const [login, setLogin] = useState("");
@@ -141,6 +145,25 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
       ciphertextEntropy,
     };
   }, [visualPlaintext, visualCipher]);
+
+  const filteredRows = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return rows;
+
+    return rows.filter((row) => {
+      const id = (row.id ?? "").toLowerCase();
+      const siteValue = String((row.meta as any)?.site ?? "").toLowerCase();
+      const loginValue = String((row.meta as any)?.login ?? "").toLowerCase();
+      const userIdValue = String((row.meta as any)?.userId ?? "").toLowerCase();
+
+      return (
+        id.includes(query) ||
+        siteValue.includes(query) ||
+        loginValue.includes(query) ||
+        userIdValue.includes(query)
+      );
+    });
+  }, [rows, searchQuery]);
 
   function addLog(message: string) {
     const stamp = new Date().toLocaleTimeString();
@@ -356,7 +379,11 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
         <div className="crypto-head">
           <span className="crypto-title">Crypto Visualizer</span>
           <div className="crypto-head-right">
-            <button className="btn crypto-payload-btn" onClick={() => setShowPayloadModal(true)} disabled={!payloadSnapshot}>
+            <button
+              className="btn crypto-payload-btn"
+              onClick={() => setShowPayloadModal(true)}
+              disabled={!payloadSnapshot}
+            >
               View Payload JSON
             </button>
             <span className={`crypto-status crypto-status-${cryptoStage}`}>
@@ -373,12 +400,18 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
           {TIMELINE_STEPS.map((step, idx) => (
             <div
               key={step}
-              className={`crypto-step ${idx <= activeStep ? "crypto-step-active" : ""} ${idx === activeStep ? "crypto-step-current" : ""}`}
+              className={`crypto-step ${idx <= activeStep ? "crypto-step-active" : ""} ${
+                idx === activeStep ? "crypto-step-current" : ""
+              }`}
             >
               <div className="crypto-step-dot">{idx + 1}</div>
               <div className="crypto-step-label">{step}</div>
               {idx < TIMELINE_STEPS.length - 1 && (
-                <div className={`crypto-step-line ${idx < activeStep ? "crypto-step-line-active" : ""}`} />
+                <div
+                  className={`crypto-step-line ${
+                    idx < activeStep ? "crypto-step-line-active" : ""
+                  }`}
+                />
               )}
             </div>
           ))}
@@ -426,11 +459,15 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
           </div>
           <div className="crypto-stat-card">
             <div className="crypto-stat-label">Plaintext entropy</div>
-            <div className="crypto-stat-value">{stats.plaintextEntropy ? stats.plaintextEntropy.toFixed(2) : "-"}</div>
+            <div className="crypto-stat-value">
+              {stats.plaintextEntropy ? stats.plaintextEntropy.toFixed(2) : "-"}
+            </div>
           </div>
           <div className="crypto-stat-card">
             <div className="crypto-stat-label">Ciphertext entropy</div>
-            <div className="crypto-stat-value">{stats.ciphertextEntropy ? stats.ciphertextEntropy.toFixed(2) : "-"}</div>
+            <div className="crypto-stat-value">
+              {stats.ciphertextEntropy ? stats.ciphertextEntropy.toFixed(2) : "-"}
+            </div>
           </div>
           <div className="crypto-stat-card crypto-stat-card-wide">
             <div className="crypto-stat-label">IV reuse check (session)</div>
@@ -456,6 +493,12 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
         </div>
       </div>
 
+      {searchQuery.trim() && (
+        <div className="muted small" style={{ marginBottom: 8 }}>
+          Search results for: <strong>{searchQuery}</strong>
+        </div>
+      )}
+
       <div className="vault-table-wrap">
         <table className="vault-table">
           <thead>
@@ -467,24 +510,26 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
+            {filteredRows.length === 0 ? (
               <tr>
                 <td colSpan={4} className="muted">
-                  No items yet.
+                  {searchQuery.trim() ? "No matching items found." : "No items yet."}
                 </td>
               </tr>
             ) : (
-              rows.map((r) => (
+              filteredRows.map((r) => (
                 <tr key={r.id ?? r._idx}>
                   <td className="vault-id" title={r.id ?? ""}>
                     {(r.id ?? "").slice(0, 8) || "-"}
                   </td>
                   <td className="vault-meta">{(r.meta as any)?.site ?? "-"}</td>
-                  <td className="vault-meta">
-                    {(r.meta as any)?.login ?? "-"}
-                  </td>
+                  <td className="vault-meta">{(r.meta as any)?.login ?? "-"}</td>
                   <td className="vault-actions">
-                    <button className="btn btn-primary" onClick={() => void handleDecrypt(r)} disabled={busy}>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => void handleDecrypt(r)}
+                      disabled={busy}
+                    >
                       Decrypt
                     </button>
                     {r.id && (
@@ -537,7 +582,9 @@ export default function VaultPanel({ currentUser }: VaultPanelProps) {
                 Close
               </button>
             </div>
-            <pre className="crypto-modal-body">{payloadSnapshot || "No payload captured yet."}</pre>
+            <pre className="crypto-modal-body">
+              {payloadSnapshot || "No payload captured yet."}
+            </pre>
             <div className="crypto-modal-actions">
               <button
                 className="btn"
