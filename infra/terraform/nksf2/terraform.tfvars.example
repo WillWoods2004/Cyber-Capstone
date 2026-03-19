@@ -1,0 +1,21 @@
+aws_region          = "us-east-1"
+project_name        = "securitypass"
+environment         = "prod"
+vpc_id              = "vpc-xxxxxxxx"
+public_subnet_ids   = ["subnet-public-a", "subnet-public-b"]
+private_subnet_ids  = ["subnet-private-a", "subnet-private-b"]
+certificate_arn     = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+allowed_ingress_cidrs = [
+  "0.0.0.0/0"
+]
+cors_allowed_origins = [
+  "https://main.d18bgjfq8i2fkv.amplifyapp.com"
+]
+ecr_repository_name = "securitypass-api"
+service_name        = "securitypass-api"
+container_port      = 8080
+desired_count       = 1
+cpu                 = 256
+memory              = 512
+image_tag           = "latest"
+healthcheck_path    = "/healthz"
