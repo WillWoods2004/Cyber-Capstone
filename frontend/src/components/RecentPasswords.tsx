@@ -10,13 +10,18 @@ type PasswordEntry = {
   plaintext: string;
 };
 
+type RecentPasswordsProps = {
+  onViewAll?: () => void;
+};
+
 function getStrength(password: string): "strong" | "medium" | "weak" {
-  const hasUpper   = /[A-Z]/.test(password);
-  const hasLower   = /[a-z]/.test(password);
-  const hasNumber  = /[0-9]/.test(password);
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
   const hasSpecial = /[^A-Za-z0-9]/.test(password);
-  const long       = password.length >= 12;
-  const score      = [hasUpper, hasLower, hasNumber, hasSpecial, long].filter(Boolean).length;
+  const long = password.length >= 12;
+  const score = [hasUpper, hasLower, hasNumber, hasSpecial, long].filter(Boolean).length;
+
   if (score >= 4) return "strong";
   if (score >= 2) return "medium";
   return "weak";
@@ -25,17 +30,17 @@ function getStrength(password: string): "strong" | "medium" | "weak" {
 function timeAgo(iso?: string): string {
   if (!iso) return "Unknown";
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60)    return "Just now";
-  if (diff < 3600)  return `${Math.floor(diff / 60)} minutes ago`;
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
   return `${Math.floor(diff / 86400)} days ago`;
 }
 
-export default function RecentPasswords() {
+export default function RecentPasswords({ onViewAll }: RecentPasswordsProps) {
   const { listItems, decryptItem, isReady } = useCrypto();
-  const [passwords, setPasswords]           = useState<PasswordEntry[]>([]);
-  const [showPassword, setShowPassword]     = useState<{ [key: number]: boolean }>({});
-  const [loading, setLoading]               = useState(true);
+  const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
+  const [showPassword, setShowPassword] = useState<{ [key: number]: boolean }>({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!isReady) return;
@@ -58,10 +63,16 @@ export default function RecentPasswords() {
           try {
             const plaintext = await decryptItem(item);
             entries.push({
-              site:      (item.meta?.site as string)     || "Unknown Site",
-              username:  (item.meta?.username as string) || "—",
-              lastUsed:  timeAgo(item.meta?.savedAt as string),
-              strength:  getStrength(plaintext),
+              site: (item.meta?.site as string) || "Unknown Site",
+              username:
+                (item.meta?.username as string) ||
+                (item.meta?.login as string) ||
+                "—",
+              lastUsed: timeAgo(
+                (item.meta?.savedAt as string) ||
+                  (item.meta?.createdAt as string)
+              ),
+              strength: getStrength(plaintext),
               plaintext,
             });
           } catch {
@@ -88,8 +99,11 @@ export default function RecentPasswords() {
     <div className="panel">
       <div className="panel-header">
         <h3 className="panel-title">Recent Passwords</h3>
-        <button className="panel-link">View All →</button>
+        <button className="panel-link" onClick={onViewAll}>
+          View All →
+        </button>
       </div>
+
       <div className="panel-content">
         <div className="password-list">
           {loading && (
@@ -97,11 +111,13 @@ export default function RecentPasswords() {
               Loading passwords...
             </p>
           )}
+
           {!loading && passwords.length === 0 && (
             <p style={{ color: "#6b7280", fontSize: "0.85rem", padding: "0.5rem 0" }}>
               No passwords saved yet.
             </p>
           )}
+
           {passwords.map((pwd, idx) => (
             <div key={idx} className="password-item">
               <div className="password-item-left">
@@ -113,10 +129,16 @@ export default function RecentPasswords() {
                   </p>
                 </div>
               </div>
+
               <div className="password-item-right">
-                <span className={`password-badge badge-${pwd.strength}`}>{pwd.strength}</span>
+                <span className={`password-badge badge-${pwd.strength}`}>
+                  {pwd.strength}
+                </span>
                 <span className="password-time">{pwd.lastUsed}</span>
-                <button className="password-toggle" onClick={() => togglePassword(idx)}>
+                <button
+                  className="password-toggle"
+                  onClick={() => togglePassword(idx)}
+                >
                   {showPassword[idx] ? "🙈" : "👁️"}
                 </button>
               </div>
