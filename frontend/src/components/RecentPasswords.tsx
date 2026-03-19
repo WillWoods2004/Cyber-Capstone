@@ -10,6 +10,10 @@ type PasswordEntry = {
   plaintext: string;
 };
 
+type RecentPasswordsProps = {
+  currentUser: string;
+};
+
 function getStrength(password: string): "strong" | "medium" | "weak" {
   const hasUpper = /[A-Z]/.test(password);
   const hasLower = /[a-z]/.test(password);
@@ -17,6 +21,7 @@ function getStrength(password: string): "strong" | "medium" | "weak" {
   const hasSpecial = /[^A-Za-z0-9]/.test(password);
   const long = password.length >= 12;
   const score = [hasUpper, hasLower, hasNumber, hasSpecial, long].filter(Boolean).length;
+
   if (score >= 4) return "strong";
   if (score >= 2) return "medium";
   return "weak";
@@ -35,7 +40,27 @@ function getSavedTimestamp(item: CipherBlob): string | undefined {
   return (item.meta?.savedAt as string | undefined) || (item.meta?.createdAt as string | undefined);
 }
 
-export default function RecentPasswords() {
+function belongsToCurrentUser(item: CipherBlob, currentUser: string): boolean {
+  const metaUserId = (item.meta?.userId as string | undefined) ?? "";
+  const metaUsername = (item.meta?.username as string | undefined) ?? "";
+  const metaLogin = (item.meta?.login as string | undefined) ?? "";
+
+  if (!currentUser.trim()) {
+    return true;
+  }
+
+  if (!metaUserId && !metaUsername && !metaLogin) {
+    return true;
+  }
+
+  return (
+    metaUserId === currentUser ||
+    metaUsername === currentUser ||
+    metaLogin === currentUser
+  );
+}
+
+export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
   const { listItems, decryptItem, isReady } = useCrypto();
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [showPassword, setShowPassword] = useState<{ [key: number]: boolean }>({});
@@ -53,7 +78,9 @@ export default function RecentPasswords() {
       try {
         const items: CipherBlob[] = await listItems();
 
-        const sorted = [...items].sort((a, b) => {
+        const userItems = items.filter((item) => belongsToCurrentUser(item, currentUser));
+
+        const sorted = [...userItems].sort((a, b) => {
           const aTime = getSavedTimestamp(a) ? new Date(getSavedTimestamp(a) as string).getTime() : 0;
           const bTime = getSavedTimestamp(b) ? new Date(getSavedTimestamp(b) as string).getTime() : 0;
           return bTime - aTime;
@@ -68,7 +95,9 @@ export default function RecentPasswords() {
             entries.push({
               site: (item.meta?.site as string) || "Unknown Site",
               username:
-                (item.meta?.username as string) || (item.meta?.login as string) || "-",
+                (item.meta?.username as string) ||
+                (item.meta?.login as string) ||
+                "-",
               lastUsed: timeAgo(getSavedTimestamp(item)),
               strength: getStrength(plaintext),
               plaintext,
@@ -88,7 +117,7 @@ export default function RecentPasswords() {
     }
 
     void load();
-  }, [decryptItem, isReady, listItems]);
+  }, [decryptItem, isReady, listItems, currentUser]);
 
   const togglePassword = (idx: number) => {
     setShowPassword((prev) => ({ ...prev, [idx]: !prev[idx] }));
@@ -98,7 +127,6 @@ export default function RecentPasswords() {
     <div className="panel">
       <div className="panel-header">
         <h3 className="panel-title">Recent Passwords</h3>
-        <button className="panel-link">View All -&gt;</button>
       </div>
       <div className="panel-content">
         <div className="password-list">

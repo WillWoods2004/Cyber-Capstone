@@ -71,11 +71,11 @@ export default function Dashboard({
                 </p>
               </div>
 
-              <StatsCards />
+              <StatsCards currentUser={username} />
 
               <div className="dashboard-grid">
                 <div className="grid-col-2">
-                  <RecentPasswords />
+                  <RecentPasswords currentUser={username} />
                 </div>
                 <div className="grid-col-1">
                   <ActivityFeed />
