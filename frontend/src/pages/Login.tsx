@@ -3,7 +3,7 @@ import { ErrorBox } from "../components/Error";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { VaultProfile } from "../crypto/crypto";
 import { AUTH_API_BASE } from "../config/api";
-import { saveChallengeToken } from "../auth/session";
+import { clearSessionTokens, saveChallengeToken } from "../auth/session";
 
 const MAX_ATTEMPTS = 5;
 
@@ -41,7 +41,7 @@ export default function Login({
   const [loading, setLoading] = useState(false);
   const [capsOn, setCapsOn] = useState(false);
 
-  const { unlockVault, clearKey } = useCrypto();
+  const { setLegacyMasterPassword, unlockVault, clearKey } = useCrypto();
 
   const limitReached = attempts >= MAX_ATTEMPTS;
   const attemptsRemaining = Math.max(MAX_ATTEMPTS - attempts, 0);
@@ -100,13 +100,14 @@ export default function Login({
       }
 
       const challengeToken = typeof data.challengeToken === "string" ? data.challengeToken : "";
-      if (!challengeToken) {
-        throw new Error("Login succeeded but the MFA challenge token was missing. Please try again.");
+      if (challengeToken) {
+        const profile = normalizeVaultProfile(data.vaultProfile);
+        await unlockVault(username, password, profile);
+        saveChallengeToken(challengeToken);
+      } else {
+        clearSessionTokens();
+        await setLegacyMasterPassword(username, password);
       }
-
-      const profile = normalizeVaultProfile(data.vaultProfile);
-      await unlockVault(username, password, profile);
-      saveChallengeToken(challengeToken);
 
       setPassword("");
       setError("");
@@ -115,6 +116,7 @@ export default function Login({
       onPasswordOk(Boolean(data.mfaEnabled), username);
     } catch (err) {
       console.error("Login network error:", err);
+      clearSessionTokens();
       clearKey();
       setError(err instanceof Error ? err.message : "Network error. Try again.");
     } finally {

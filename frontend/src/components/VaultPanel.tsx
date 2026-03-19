@@ -115,7 +115,9 @@ function shannonEntropy(text?: string | null): number {
 export default function VaultPanel() {
   const {
     isReady,
+    supportsKeyRotation,
     vaultProfile,
+    vaultMode,
     encryptOnly,
     storeCipherBlob,
     listItems,
@@ -293,7 +295,12 @@ export default function VaultPanel() {
     addLog(`Loading ciphertext for item ${row.id.slice(0, 8)}`);
 
     try {
-      const freshItem = await getItem(row.id);
+      let freshItem: CipherBlob = row;
+      try {
+        freshItem = await getItem(row.id);
+      } catch {
+        addLog("Single-item fetch unavailable, decrypting cached row");
+      }
       setVisualCipher(freshItem);
       setPayloadSnapshot(
         JSON.stringify(
@@ -344,11 +351,10 @@ export default function VaultPanel() {
     setRotationMessage(null);
 
     try {
+      const token = getAuthToken();
       const res = await fetch(`${VAULT_API_BASE}/vault/items/${id}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${getAuthToken() ?? ""}`,
-        },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
 
       if (!res.ok && res.status !== 204) {
@@ -437,6 +443,9 @@ export default function VaultPanel() {
           <div className="vault-profile-value">
             AES-256-GCM, Argon2id, zero-knowledge sync, auto-lock enabled
           </div>
+          {vaultMode === "legacy" && (
+            <div className="vault-profile-meta">Live API compatibility mode</div>
+          )}
           {vaultProfile && (
             <div className="vault-profile-meta">
               Key version v{vaultProfile.keyVersion}
@@ -444,12 +453,16 @@ export default function VaultPanel() {
           )}
         </div>
 
-        <button className="btn" onClick={() => setShowRotationPanel((prev) => !prev)} disabled={busy}>
-          {showRotationPanel ? "Hide rotation" : "Rotate vault key"}
-        </button>
+        {supportsKeyRotation ? (
+          <button className="btn" onClick={() => setShowRotationPanel((prev) => !prev)} disabled={busy}>
+            {showRotationPanel ? "Hide rotation" : "Rotate vault key"}
+          </button>
+        ) : (
+          <div className="vault-profile-meta">Rotation requires the newer backend contract.</div>
+        )}
       </div>
 
-      {showRotationPanel && (
+      {supportsKeyRotation && showRotationPanel && (
         <div className="vault-rotation-panel">
           <div className="vault-rotation-copy">
             Re-encrypt every stored item client-side with a new Argon2id-derived key. The server only receives new ciphertext.

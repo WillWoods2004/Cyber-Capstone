@@ -79,6 +79,9 @@ const RotateKeyBody = z.object({
 const db = new Map<string, Item>();
 const users = new Map<string, UserRecord>();
 const mockMfaCode = process.env.MOCK_MFA_CODE?.trim() || "123456";
+const TOTP_STEP_SECONDS = 30;
+const TOTP_DIGITS = 6;
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 function normalizeUsername(username: string): string {
   return username.trim().toLowerCase();
@@ -89,6 +92,96 @@ function createVaultProfile(): VaultProfile {
     salt: randomBytes(16).toString("base64"),
     keyVersion: 1,
   };
+}
+
+function encodeBase32(bytes: Buffer) {
+  let bits = 0;
+  let value = 0;
+  let output = "";
+
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+
+    while (bits >= 5) {
+      output += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+
+  if (bits > 0) {
+    output += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+  }
+
+  return output;
+}
+
+function decodeBase32(input: string) {
+  const normalized = input.toUpperCase().replace(/=+$/g, "").replace(/\s+/g, "");
+  let bits = 0;
+  let value = 0;
+  const bytes: number[] = [];
+
+  for (const char of normalized) {
+    const idx = BASE32_ALPHABET.indexOf(char);
+    if (idx === -1) {
+      throw new Error("Invalid base32 secret.");
+    }
+
+    value = (value << 5) | idx;
+    bits += 5;
+
+    if (bits >= 8) {
+      bytes.push((value >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+
+  return Buffer.from(bytes);
+}
+
+function generateTotpSecret() {
+  return encodeBase32(randomBytes(20));
+}
+
+function generateTotpCode(secret: string, counter: number) {
+  const key = decodeBase32(secret);
+  const msg = Buffer.alloc(8);
+  msg.writeBigUInt64BE(BigInt(counter));
+
+  const digest = createHmac("sha1", key).update(msg).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary =
+    ((digest[offset] & 0x7f) << 24) |
+    ((digest[offset + 1] & 0xff) << 16) |
+    ((digest[offset + 2] & 0xff) << 8) |
+    (digest[offset + 3] & 0xff);
+
+  return String(binary % 10 ** TOTP_DIGITS).padStart(TOTP_DIGITS, "0");
+}
+
+function verifyTotpCode(secret: string | undefined, code: string, now = Date.now()) {
+  if (!secret) {
+    return false;
+  }
+
+  const normalizedCode = code.trim();
+  if (!/^\d{6}$/.test(normalizedCode)) {
+    return false;
+  }
+
+  try {
+    const currentCounter = Math.floor(now / 1000 / TOTP_STEP_SECONDS);
+    for (let offset = -1; offset <= 1; offset += 1) {
+      if (generateTotpCode(secret, currentCounter + offset) === normalizedCode) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 function tokenSignature(body: string): Buffer {
@@ -261,12 +354,14 @@ app.post("/mfa/setup", requireToken("challenge"), (req, res) => {
     return;
   }
 
-  const secret = randomBytes(10).toString("hex").toUpperCase();
+  const secret = generateTotpSecret();
   user.mfaSecret = secret;
 
   const label = encodeURIComponent(`SecurityPass:${user.username}`);
   const issuer = encodeURIComponent("SecurityPass");
-  const otpAuthUrl = `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}`;
+  const otpAuthUrl =
+    `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}` +
+    `&algorithm=SHA1&digits=${TOTP_DIGITS}&period=${TOTP_STEP_SECONDS}`;
 
   return res.status(200).json({
     success: true,
@@ -287,7 +382,7 @@ app.post("/mfa/verify", requireToken("challenge"), (req, res) => {
     return;
   }
 
-  if (parsed.data.code !== mockMfaCode) {
+  if (parsed.data.code !== mockMfaCode && !verifyTotpCode(user.mfaSecret, parsed.data.code)) {
     return res.status(401).json({ success: false, message: "Invalid MFA code. Try again." });
   }
 

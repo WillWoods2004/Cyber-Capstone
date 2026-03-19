@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import {
   decryptEntry,
   decryptEntryBytes,
+  deriveLegacyMasterKey,
   deriveMasterKey,
   encryptEntry,
   encryptEntryBytes,
@@ -19,9 +20,14 @@ type RotateVaultKeyInput = {
   newPassword: string;
 };
 
+type VaultMode = "legacy" | "tokenized" | null;
+
 type Ctx = {
   isReady: boolean;
   vaultProfile: VaultProfile | null;
+  vaultMode: VaultMode;
+  supportsKeyRotation: boolean;
+  setLegacyMasterPassword: (username: string, password: string) => Promise<void>;
   unlockVault: (username: string, password: string, profile: VaultProfile) => Promise<void>;
   encryptOnly: (plaintext: string, meta?: Record<string, unknown>) => Promise<CipherBlob>;
   storeCipherBlob: (blob: CipherBlob) => Promise<{ id: string }>;
@@ -51,7 +57,7 @@ function normalizeVaultProfile(value: unknown): VaultProfile {
   };
 }
 
-function sanitizeMeta(meta?: Record<string, unknown>, keyVersion?: number) {
+function sanitizeSecureMeta(meta?: Record<string, unknown>, keyVersion?: number) {
   const nextMeta = { ...(meta ?? {}) };
   delete nextMeta.userId;
 
@@ -64,9 +70,13 @@ function sanitizeMeta(meta?: Record<string, unknown>, keyVersion?: number) {
 
 export function CryptoProvider({ children }: { children: React.ReactNode }) {
   const keyBytesRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const usernameRef = useRef<string>("");
   const profileRef = useRef<VaultProfile | null>(null);
+  const modeRef = useRef<VaultMode>(null);
+
   const [isReady, setReady] = useState(false);
   const [vaultProfile, setVaultProfile] = useState<VaultProfile | null>(null);
+  const [vaultMode, setVaultMode] = useState<VaultMode>(null);
 
   const requireKeyBytes = useCallback(() => {
     if (!keyBytesRef.current) {
@@ -76,28 +86,18 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     return keyBytesRef.current;
   }, []);
 
-  const requireAuthToken = useCallback(() => {
+  const authorizedFetch = useCallback(async (path: string, init: RequestInit = {}) => {
+    const headers = new Headers(init.headers ?? {});
     const token = getAuthToken();
-    if (!token) {
-      throw new Error("Missing auth token. Complete MFA again.");
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
     }
 
-    return token;
+    return fetch(`${VAULT_API_BASE}${path}`, {
+      ...init,
+      headers,
+    });
   }, []);
-
-  const authorizedFetch = useCallback(
-    async (path: string, init: RequestInit = {}) => {
-      const token = requireAuthToken();
-      const headers = new Headers(init.headers ?? {});
-      headers.set("Authorization", `Bearer ${token}`);
-
-      return fetch(`${VAULT_API_BASE}${path}`, {
-        ...init,
-        headers,
-      });
-    },
-    [requireAuthToken]
-  );
 
   const clearKey = useCallback(() => {
     if (keyBytesRef.current) {
@@ -105,19 +105,41 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     }
 
     keyBytesRef.current = null;
+    usernameRef.current = "";
     profileRef.current = null;
+    modeRef.current = null;
     setVaultProfile(null);
+    setVaultMode(null);
     setReady(false);
   }, []);
 
+  const setLegacyMasterPassword = useCallback(
+    async (username: string, password: string) => {
+      clearKey();
+
+      const keyBytes = await deriveLegacyMasterKey(username, password);
+      keyBytesRef.current = keyBytes;
+      usernameRef.current = username;
+      profileRef.current = null;
+      modeRef.current = "legacy";
+      setVaultProfile(null);
+      setVaultMode("legacy");
+      setReady(true);
+    },
+    [clearKey]
+  );
+
   const unlockVault = useCallback(
-    async (_username: string, password: string, profile: VaultProfile) => {
+    async (username: string, password: string, profile: VaultProfile) => {
       clearKey();
 
       const keyBytes = await deriveMasterKey(password, profile.salt);
       keyBytesRef.current = keyBytes;
+      usernameRef.current = username;
       profileRef.current = profile;
+      modeRef.current = "tokenized";
       setVaultProfile(profile);
+      setVaultMode("tokenized");
       setReady(true);
     },
     [clearKey]
@@ -126,22 +148,39 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   const encryptOnly = useCallback(
     async (plaintext: string, meta?: Record<string, unknown>) => {
       const keyBytes = requireKeyBytes();
-      const profile = profileRef.current;
 
-      return encryptEntry(plaintext, keyBytes, sanitizeMeta(meta, profile?.keyVersion));
+      if (modeRef.current === "tokenized") {
+        return encryptEntry(plaintext, keyBytes, sanitizeSecureMeta(meta, profileRef.current?.keyVersion));
+      }
+
+      return encryptEntry(plaintext, keyBytes, {
+        ...(meta ?? {}),
+        userId: usernameRef.current,
+      });
     },
     [requireKeyBytes]
   );
 
   const storeCipherBlob = useCallback(
     async (blob: CipherBlob) => {
+      const body =
+        modeRef.current === "tokenized"
+          ? {
+              ...blob,
+              meta: sanitizeSecureMeta(blob.meta, profileRef.current?.keyVersion),
+            }
+          : {
+              ...blob,
+              meta: {
+                ...(blob.meta ?? {}),
+                userId: usernameRef.current,
+              },
+            };
+
       const res = await authorizedFetch("/vault/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...blob,
-          meta: sanitizeMeta(blob.meta, profileRef.current?.keyVersion),
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -176,20 +215,37 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     }
 
     const payload = await res.json().catch(() => ({}));
-    return Array.isArray(payload) ? payload : (payload.items ?? []);
+    const items: CipherBlob[] = Array.isArray(payload) ? payload : (payload.items ?? []);
+
+    if (modeRef.current === "legacy") {
+      return items.filter((item) => {
+        const metaUser = (item.meta as { userId?: unknown } | undefined)?.userId;
+        return typeof metaUser === "string" && metaUser === usernameRef.current;
+      });
+    }
+
+    return items;
   }, [authorizedFetch]);
 
   const getItem = useCallback(
     async (id: string) => {
       const res = await authorizedFetch(`/vault/items/${id}`);
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(`Get failed: ${res.status}${errText ? ` - ${errText}` : ""}`);
+      if (res.ok) {
+        return res.json();
       }
 
-      return res.json();
+      if (modeRef.current === "legacy") {
+        const items = await listItems();
+        const hit = items.find((item) => item.id === id);
+        if (hit) {
+          return hit;
+        }
+      }
+
+      const errText = await res.text().catch(() => "");
+      throw new Error(`Get failed: ${res.status}${errText ? ` - ${errText}` : ""}`);
     },
-    [authorizedFetch]
+    [authorizedFetch, listItems]
   );
 
   const decryptItem = useCallback(
@@ -202,6 +258,10 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
   const rotateVaultKey = useCallback(
     async ({ currentPassword, newPassword }: RotateVaultKeyInput) => {
+      if (modeRef.current !== "tokenized") {
+        throw new Error("Vault key rotation is not supported by the deployed API yet.");
+      }
+
       if (!currentPassword.trim()) {
         throw new Error("Current master password is required.");
       }
@@ -228,7 +288,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
           const rotated = await encryptEntryBytes(
             plaintextBytes,
             nextKeyBytes,
-            sanitizeMeta(item.meta, profile.keyVersion + 1)
+            sanitizeSecureMeta(item.meta, profile.keyVersion + 1)
           );
 
           if (item.id) {
@@ -262,7 +322,9 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
         zeroize(oldKeyBytes);
         keyBytesRef.current = nextKeyBytes;
         profileRef.current = nextProfile;
+        modeRef.current = "tokenized";
         setVaultProfile(nextProfile);
+        setVaultMode("tokenized");
         setReady(true);
 
         return nextProfile;
@@ -278,6 +340,9 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     () => ({
       isReady,
       vaultProfile,
+      vaultMode,
+      supportsKeyRotation: vaultMode === "tokenized",
+      setLegacyMasterPassword,
       unlockVault,
       encryptOnly,
       storeCipherBlob,
@@ -297,8 +362,10 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       isReady,
       listItems,
       rotateVaultKey,
+      setLegacyMasterPassword,
       storeCipherBlob,
       unlockVault,
+      vaultMode,
       vaultProfile,
     ]
   );

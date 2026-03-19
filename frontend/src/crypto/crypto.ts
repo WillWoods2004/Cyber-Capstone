@@ -79,6 +79,31 @@ export async function deriveMasterKey(masterPassword: string, saltB64: string): 
   }
 }
 
+export async function deriveLegacyMasterKey(
+  username: string,
+  masterPassword: string
+): Promise<Uint8Array<ArrayBuffer>> {
+  await sodium.ready;
+  const usernameBytes = enc.encode(username);
+  const passwordBytes = enc.encode(masterPassword);
+  const salt = new Uint8Array(sodium.crypto_generichash(16, usernameBytes));
+
+  try {
+    const raw = sodium.crypto_pwhash(
+      32,
+      passwordBytes,
+      salt,
+      sodium.crypto_pwhash_OPSLIMIT_MODERATE,
+      sodium.crypto_pwhash_MEMLIMIT_MODERATE,
+      sodium.crypto_pwhash_ALG_ARGON2ID13
+    );
+
+    return ownBytes(new Uint8Array(raw));
+  } finally {
+    zeroize(usernameBytes, passwordBytes, salt);
+  }
+}
+
 export async function encryptEntryBytes(
   plaintext: Uint8Array,
   keyBytes: Uint8Array<ArrayBuffer>,

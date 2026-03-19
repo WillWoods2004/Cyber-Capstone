@@ -27,21 +27,26 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
       }
 
       const challengeToken = getChallengeToken();
-      if (!challengeToken) {
-        setError("Your login challenge expired. Sign in again.");
-        return;
-      }
-
       setError("");
       setLoading(true);
 
       try {
-        const response = await fetch(`${AUTH_API_BASE}/mfa/setup`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${challengeToken}`,
-          },
-        });
+        const requestInit: RequestInit = challengeToken
+          ? {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${challengeToken}`,
+              },
+            }
+          : {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ username }),
+            };
+
+        const response = await fetch(`${AUTH_API_BASE}/mfa/setup`, requestInit);
 
         const data = await response.json().catch((): Record<string, unknown> => ({}));
         if (!response.ok || !data.success) {
@@ -82,22 +87,28 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
     }
 
     const challengeToken = getChallengeToken();
-    if (!challengeToken) {
-      setError("Your login challenge expired. Sign in again.");
-      return;
-    }
 
     try {
       setLoading(true);
 
-      const response = await fetch(`${AUTH_API_BASE}/mfa/verify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${challengeToken}`,
-        },
-        body: JSON.stringify({ code }),
-      });
+      const requestInit: RequestInit = challengeToken
+        ? {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${challengeToken}`,
+            },
+            body: JSON.stringify({ code }),
+          }
+        : {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ username, code }),
+          };
+
+      const response = await fetch(`${AUTH_API_BASE}/mfa/verify`, requestInit);
 
       const data = await response.json().catch((): Record<string, unknown> => ({}));
       if (!response.ok || !data.success) {
@@ -105,12 +116,14 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
         return;
       }
 
-      if (typeof data.authToken !== "string" || !data.authToken) {
+      if (challengeToken && (typeof data.authToken !== "string" || !data.authToken)) {
         setError("MFA completed but the vault session token was missing. Sign in again.");
         return;
       }
 
-      saveAuthToken(data.authToken);
+      if (typeof data.authToken === "string" && data.authToken) {
+        saveAuthToken(data.authToken);
+      }
       clearChallengeToken();
       onMfaOk();
     } catch (err) {
