@@ -9,11 +9,15 @@ type Stats = {
   securityScore: number;
 };
 
+type StatsCardsProps = {
+  currentUser: string;
+};
+
 function isWeakPassword(password: string): boolean {
   if (password.length < 8) return true;
-  const hasUpper   = /[A-Z]/.test(password);
-  const hasLower   = /[a-z]/.test(password);
-  const hasNumber  = /[0-9]/.test(password);
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
   const hasSpecial = /[^A-Za-z0-9]/.test(password);
   const strengthCount = [hasUpper, hasLower, hasNumber, hasSpecial].filter(Boolean).length;
   return strengthCount < 3;
@@ -32,9 +36,9 @@ function calcSecurityScore(total: number, weak: number): number {
   return Math.round(strongRatio * 100);
 }
 
-export default function StatsCards() {
+export default function StatsCards({ currentUser }: StatsCardsProps) {
   const { listItems, decryptItem, isReady } = useCrypto();
-  const [stats, setStats]     = useState<Stats | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,20 +49,25 @@ export default function StatsCards() {
       try {
         const items: CipherBlob[] = await listItems();
 
+        const userItems = items.filter((item) => {
+          const itemUserId = (item.meta?.userId as string | undefined) ?? "";
+          return itemUserId === currentUser;
+        });
+
         let weak = 0;
         let expiringSoon = 0;
 
-        for (const item of items) {
+        for (const item of userItems) {
           try {
             const plaintext = await decryptItem(item);
             if (isWeakPassword(plaintext)) weak++;
-            if (isExpiringSoon(item.meta))  expiringSoon++;
+            if (isExpiringSoon(item.meta)) expiringSoon++;
           } catch {
             // skip items that fail to decrypt
           }
         }
 
-        const total = items.length;
+        const total = userItems.length;
         setStats({
           total,
           weak,
@@ -73,7 +82,7 @@ export default function StatsCards() {
     }
 
     computeStats();
-  }, [isReady, listItems, decryptItem]);
+  }, [isReady, listItems, decryptItem, currentUser]);
 
   const cards = [
     {
