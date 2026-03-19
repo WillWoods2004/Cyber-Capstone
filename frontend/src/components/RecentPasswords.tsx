@@ -10,6 +10,10 @@ type PasswordEntry = {
   plaintext: string;
 };
 
+type RecentPasswordsProps = {
+  currentUser: string;
+};
+
 function getStrength(password: string): "strong" | "medium" | "weak" {
   const hasUpper = /[A-Z]/.test(password);
   const hasLower = /[a-z]/.test(password);
@@ -31,7 +35,7 @@ function timeAgo(iso?: string): string {
   return `${Math.floor(diff / 86400)} days ago`;
 }
 
-export default function RecentPasswords() {
+export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
   const { listItems, decryptItem, isReady } = useCrypto();
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [showPassword, setShowPassword] = useState<{ [key: number]: boolean }>({});
@@ -45,9 +49,24 @@ export default function RecentPasswords() {
       try {
         const items: CipherBlob[] = await listItems();
 
-        const sorted = [...items].sort((a, b) => {
-          const aTime = a.meta?.savedAt ? new Date(a.meta.savedAt as string).getTime() : 0;
-          const bTime = b.meta?.savedAt ? new Date(b.meta.savedAt as string).getTime() : 0;
+        const userItems = items.filter((item) => {
+          const itemUserId = (item.meta?.userId as string | undefined) ?? "";
+          return itemUserId === currentUser;
+        });
+
+        const sorted = [...userItems].sort((a, b) => {
+          const aTime = a.meta?.savedAt
+            ? new Date(a.meta.savedAt as string).getTime()
+            : a.meta?.createdAt
+            ? new Date(a.meta.createdAt as string).getTime()
+            : 0;
+
+          const bTime = b.meta?.savedAt
+            ? new Date(b.meta.savedAt as string).getTime()
+            : b.meta?.createdAt
+            ? new Date(b.meta.createdAt as string).getTime()
+            : 0;
+
           return bTime - aTime;
         });
 
@@ -84,7 +103,7 @@ export default function RecentPasswords() {
     }
 
     load();
-  }, [isReady, listItems, decryptItem]);
+  }, [isReady, listItems, decryptItem, currentUser]);
 
   const togglePassword = (idx: number) => {
     setShowPassword((prev) => ({ ...prev, [idx]: !prev[idx] }));
