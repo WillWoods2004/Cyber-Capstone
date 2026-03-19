@@ -25,7 +25,7 @@ type ActiveView =
   | "security"
   | "settings";
 
-const AUTO_LOCK_MS = 5 * 60 * 1000;
+const AUTO_LOCK_MS = 2 * 60 * 1000;
 
 export default function Dashboard({
   username,
