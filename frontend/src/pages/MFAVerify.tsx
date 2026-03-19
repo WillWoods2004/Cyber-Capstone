@@ -75,7 +75,7 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
     };
 
     void startSetup();
-  }, [mode]);
+  }, [mode, username]);
 
   const handleVerify = async (event: React.FormEvent) => {
     event.preventDefault();

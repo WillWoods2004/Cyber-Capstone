@@ -447,16 +447,20 @@ export default function VaultPanel({
     setRotationMessage(null);
 
     if (!currentMasterPassword.trim()) {
-      setErr("Current master password is required for rotation.");
+      setErr(
+        vaultMode === "legacy"
+          ? "Current sign-in password is required for rotation."
+          : "Current master password is required for rotation."
+      );
       return;
     }
 
-    if (newMasterPassword.trim().length < 8) {
+    if (vaultMode !== "legacy" && newMasterPassword.trim().length < 8) {
       setErr("New master password must be at least 8 characters.");
       return;
     }
 
-    if (newMasterPassword !== confirmNewMasterPassword) {
+    if (vaultMode !== "legacy" && newMasterPassword !== confirmNewMasterPassword) {
       setErr("New password confirmation does not match.");
       return;
     }
@@ -468,13 +472,15 @@ export default function VaultPanel({
     try {
       const nextProfile = await rotateVaultKey({
         currentPassword: currentMasterPassword,
-        newPassword: newMasterPassword,
+        newPassword: vaultMode === "legacy" ? currentMasterPassword : newMasterPassword,
       });
 
       clearRotationForm();
       setShowRotationPanel(false);
       setRotationMessage(
-        `Vault key rotated successfully. Key version is now v${nextProfile.keyVersion}. Use your new master password the next time you sign in.`
+        vaultMode === "legacy"
+          ? `Vault key rotated successfully. Key version is now v${nextProfile.keyVersion}. Continue signing in with your existing password.`
+          : `Vault key rotated successfully. Key version is now v${nextProfile.keyVersion}. Use your new master password the next time you sign in.`
       );
       setCryptoStage("rotated");
       addLog(`Vault key rotated to version ${nextProfile.keyVersion}`);
@@ -523,41 +529,42 @@ export default function VaultPanel({
           >
             {showRotationPanel ? "Hide rotation" : "Rotate vault key"}
           </button>
-        ) : (
-          <div className="vault-profile-meta">
-            Rotation requires the newer backend contract.
-          </div>
-        )}
+        ) : null}
       </div>
 
       {supportsKeyRotation && showRotationPanel && (
         <div className="vault-rotation-panel">
           <div className="vault-rotation-copy">
-            Re-encrypt every stored item client-side with a new Argon2id-derived key. The
-            server only receives new ciphertext.
+            {vaultMode === "legacy"
+              ? "Re-encrypt every stored item client-side with a fresh Argon2id-derived key while keeping your existing sign-in password. The server only receives new ciphertext plus a non-secret vault profile."
+              : "Re-encrypt every stored item client-side with a new Argon2id-derived key. The server only receives new ciphertext."}
           </div>
           <div className="vault-rotation-grid">
             <input
               className="vault-input"
               type="password"
-              placeholder="Current master password"
+              placeholder={vaultMode === "legacy" ? "Current sign-in password" : "Current master password"}
               value={currentMasterPassword}
               onChange={(event) => setCurrentMasterPassword(event.target.value)}
             />
-            <input
-              className="vault-input"
-              type="password"
-              placeholder="New master password"
-              value={newMasterPassword}
-              onChange={(event) => setNewMasterPassword(event.target.value)}
-            />
-            <input
-              className="vault-input"
-              type="password"
-              placeholder="Confirm new master password"
-              value={confirmNewMasterPassword}
-              onChange={(event) => setConfirmNewMasterPassword(event.target.value)}
-            />
+            {vaultMode !== "legacy" && (
+              <input
+                className="vault-input"
+                type="password"
+                placeholder="New master password"
+                value={newMasterPassword}
+                onChange={(event) => setNewMasterPassword(event.target.value)}
+              />
+            )}
+            {vaultMode !== "legacy" && (
+              <input
+                className="vault-input"
+                type="password"
+                placeholder="Confirm new master password"
+                value={confirmNewMasterPassword}
+                onChange={(event) => setConfirmNewMasterPassword(event.target.value)}
+              />
+            )}
             <button
               className="btn btn-primary"
               onClick={() => void handleRotateKey()}

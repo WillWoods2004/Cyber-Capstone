@@ -22,6 +22,8 @@ type RotateVaultKeyInput = {
 
 type VaultMode = "legacy" | "tokenized" | null;
 
+const LEGACY_PROFILE_KIND = "securitypass-vault-profile";
+
 type Ctx = {
   isReady: boolean;
   vaultProfile: VaultProfile | null;
@@ -68,6 +70,104 @@ function sanitizeSecureMeta(meta?: Record<string, unknown>, keyVersion?: number)
   return nextMeta;
 }
 
+function normalizeUserMarker(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function sanitizeLegacyMeta(
+  username: string,
+  meta?: Record<string, unknown>,
+  keyVersion?: number
+) {
+  const nextMeta = { ...(meta ?? {}) };
+  nextMeta.userId = username;
+
+  if (
+    typeof nextMeta.username !== "string" &&
+    typeof nextMeta.login !== "string"
+  ) {
+    nextMeta.username = username;
+  }
+
+  if (typeof keyVersion === "number") {
+    nextMeta.keyVersion = keyVersion;
+  }
+
+  return nextMeta;
+}
+
+function extractItems(payload: unknown): CipherBlob[] {
+  if (Array.isArray(payload)) {
+    return payload as CipherBlob[];
+  }
+
+  if (
+    payload &&
+    typeof payload === "object" &&
+    Array.isArray((payload as { items?: unknown }).items)
+  ) {
+    return (payload as { items: CipherBlob[] }).items;
+  }
+
+  return [];
+}
+
+function belongsToUser(item: CipherBlob, username: string) {
+  const meta = (item.meta as Record<string, unknown> | undefined) ?? {};
+  const normalizedUsername = normalizeUserMarker(username);
+  const markers = [meta.userId, meta.username, meta.login]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map(normalizeUserMarker);
+
+  return markers.some((marker) => marker === normalizedUsername);
+}
+
+function legacyProfileItemId(username: string) {
+  return `vault-profile-${normalizeUserMarker(username).replace(/[^a-z0-9_-]/g, "_")}`;
+}
+
+function isLegacyProfileItem(item: CipherBlob, username: string) {
+  const meta = (item.meta as Record<string, unknown> | undefined) ?? {};
+  return meta.system === LEGACY_PROFILE_KIND && belongsToUser(item, username);
+}
+
+function extractLegacyProfile(items: CipherBlob[], username: string): VaultProfile | null {
+  const profileItem = items.find((item) => isLegacyProfileItem(item, username));
+  if (!profileItem) {
+    return null;
+  }
+
+  const meta = (profileItem.meta as Record<string, unknown> | undefined) ?? {};
+  const salt = typeof meta.salt === "string" ? meta.salt : "";
+  const rawKeyVersion = meta.keyVersion;
+  const keyVersion =
+    typeof rawKeyVersion === "number"
+      ? rawKeyVersion
+      : typeof rawKeyVersion === "string"
+        ? Number(rawKeyVersion)
+        : Number.NaN;
+
+  if (!salt || !Number.isFinite(keyVersion) || keyVersion < 1) {
+    return null;
+  }
+
+  return { salt, keyVersion };
+}
+
+function sameBytes(a: Uint8Array<ArrayBuffer>, b: Uint8Array<ArrayBuffer>) {
+  if (a.byteLength !== b.byteLength) {
+    return false;
+  }
+
+  for (let index = 0; index < a.byteLength; index += 1) {
+    if (a[index] !== b[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function CryptoProvider({ children }: { children: React.ReactNode }) {
   const keyBytesRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const usernameRef = useRef<string>("");
@@ -99,6 +199,60 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const fetchRawItems = useCallback(async () => {
+    const res = await authorizedFetch("/vault/items");
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`List failed: ${res.status}${errText ? ` - ${errText}` : ""}`);
+    }
+
+    const payload = await res.json().catch(() => ({}));
+    return extractItems(payload);
+  }, [authorizedFetch]);
+
+  const persistCipherBlob = useCallback(
+    async (
+      blob: CipherBlob,
+      options?: {
+        legacyMeta?: Record<string, unknown>;
+        tokenizedMeta?: Record<string, unknown>;
+      }
+    ) => {
+      const body =
+        modeRef.current === "tokenized"
+          ? {
+              ...blob,
+              meta: options?.tokenizedMeta ?? sanitizeSecureMeta(blob.meta, profileRef.current?.keyVersion),
+            }
+          : {
+              ...blob,
+              meta:
+                options?.legacyMeta ??
+                sanitizeLegacyMeta(usernameRef.current, blob.meta, profileRef.current?.keyVersion ?? 1),
+            };
+
+      const res = await authorizedFetch("/vault/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`Store failed: ${res.status}${errText ? ` - ${errText}` : ""}`);
+      }
+
+      const payload = await res.json().catch(() => ({}));
+      const id = payload?.id;
+      if (!id || typeof id !== "string") {
+        throw new Error("Store failed: missing id");
+      }
+
+      return { id };
+    },
+    [authorizedFetch]
+  );
+
   const clearKey = useCallback(() => {
     if (keyBytesRef.current) {
       zeroize(keyBytesRef.current);
@@ -117,16 +271,29 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     async (username: string, password: string) => {
       clearKey();
 
-      const keyBytes = await deriveLegacyMasterKey(username, password);
+      let legacyProfile = null as VaultProfile | null;
+
+      try {
+        const rawItems = await fetchRawItems();
+        legacyProfile = extractLegacyProfile(rawItems, username);
+      } catch {
+        legacyProfile = null;
+      }
+
+      const keyBytes = legacyProfile
+        ? await deriveMasterKey(password, legacyProfile.salt)
+        : await deriveLegacyMasterKey(username, password);
+
+      const initialProfile = legacyProfile ?? { salt: "", keyVersion: 1 };
       keyBytesRef.current = keyBytes;
       usernameRef.current = username;
-      profileRef.current = null;
+      profileRef.current = initialProfile;
       modeRef.current = "legacy";
-      setVaultProfile(null);
+      setVaultProfile(initialProfile);
       setVaultMode("legacy");
       setReady(true);
     },
-    [clearKey]
+    [clearKey, fetchRawItems]
   );
 
   const unlockVault = useCallback(
@@ -162,41 +329,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   );
 
   const storeCipherBlob = useCallback(
-    async (blob: CipherBlob) => {
-      const body =
-        modeRef.current === "tokenized"
-          ? {
-              ...blob,
-              meta: sanitizeSecureMeta(blob.meta, profileRef.current?.keyVersion),
-            }
-          : {
-              ...blob,
-              meta: {
-                ...(blob.meta ?? {}),
-                userId: usernameRef.current,
-              },
-            };
-
-      const res = await authorizedFetch("/vault/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(`Store failed: ${res.status}${errText ? ` - ${errText}` : ""}`);
-      }
-
-      const payload = await res.json().catch(() => ({}));
-      const id = payload?.id;
-      if (!id || typeof id !== "string") {
-        throw new Error("Store failed: missing id");
-      }
-
-      return { id };
-    },
-    [authorizedFetch]
+    async (blob: CipherBlob) => persistCipherBlob(blob),
+    [persistCipherBlob]
   );
 
   const encryptAndStore = useCallback(
@@ -208,24 +342,18 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   );
 
   const listItems = useCallback(async () => {
-    const res = await authorizedFetch("/vault/items");
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      throw new Error(`List failed: ${res.status}${errText ? ` - ${errText}` : ""}`);
-    }
-
-    const payload = await res.json().catch(() => ({}));
-    const items: CipherBlob[] = Array.isArray(payload) ? payload : (payload.items ?? []);
+    const items = await fetchRawItems();
 
     if (modeRef.current === "legacy") {
-      return items.filter((item) => {
-        const metaUser = (item.meta as { userId?: unknown } | undefined)?.userId;
-        return typeof metaUser === "string" && metaUser === usernameRef.current;
-      });
+      return items.filter(
+        (item) =>
+          belongsToUser(item, usernameRef.current) &&
+          !isLegacyProfileItem(item, usernameRef.current)
+      );
     }
 
     return items;
-  }, [authorizedFetch]);
+  }, [fetchRawItems]);
 
   const getItem = useCallback(
     async (id: string) => {
@@ -258,21 +386,140 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
   const rotateVaultKey = useCallback(
     async ({ currentPassword, newPassword }: RotateVaultKeyInput) => {
-      if (modeRef.current !== "tokenized") {
-        throw new Error("Vault key rotation is not supported by the deployed API yet.");
-      }
-
       if (!currentPassword.trim()) {
         throw new Error("Current master password is required.");
       }
 
-      if (newPassword.trim().length < 8) {
+      if (modeRef.current === "tokenized" && newPassword.trim().length < 8) {
         throw new Error("New master password must be at least 8 characters.");
       }
 
       const oldKeyBytes = requireKeyBytes();
       const profile = profileRef.current;
-      if (!profile) {
+      const currentProfile = profile ?? { salt: "", keyVersion: 1 };
+
+      if (modeRef.current === "legacy") {
+        const verifyKey = currentProfile.salt
+          ? await deriveMasterKey(currentPassword, currentProfile.salt)
+          : await deriveLegacyMasterKey(usernameRef.current, currentPassword);
+
+        try {
+          if (!sameBytes(verifyKey, oldKeyBytes)) {
+            throw new Error("Current sign-in password is incorrect.");
+          }
+        } finally {
+          zeroize(verifyKey);
+        }
+
+        const nextSalt = generateVaultSalt();
+        const nextKeyBytes = await deriveMasterKey(currentPassword, nextSalt);
+        const nextProfile: VaultProfile = {
+          salt: nextSalt,
+          keyVersion: (currentProfile.keyVersion ?? 1) + 1,
+        };
+
+        try {
+          const currentItems = await listItems();
+          const rotatedItems: CipherBlob[] = [];
+          const originalItems = currentItems.map((item) => ({ ...item }));
+
+          for (const item of currentItems) {
+            const plaintextBytes = await decryptEntryBytes(item, oldKeyBytes);
+
+            try {
+              const rotated = await encryptEntryBytes(
+                plaintextBytes,
+                nextKeyBytes,
+                sanitizeLegacyMeta(
+                  usernameRef.current,
+                  item.meta as Record<string, unknown> | undefined,
+                  nextProfile.keyVersion
+                )
+              );
+
+              if (item.id) {
+                rotated.id = item.id;
+              }
+
+              rotatedItems.push(rotated);
+            } finally {
+              zeroize(plaintextBytes);
+            }
+          }
+
+          const timestamp = new Date().toISOString();
+          const profileBlob = await encryptEntry(
+            `vault-profile:v${nextProfile.keyVersion}`,
+            nextKeyBytes,
+            sanitizeLegacyMeta(
+              usernameRef.current,
+              {
+                system: LEGACY_PROFILE_KIND,
+                salt: nextProfile.salt,
+                keyVersion: nextProfile.keyVersion,
+                createdAt: timestamp,
+                savedAt: timestamp,
+              },
+              nextProfile.keyVersion
+            )
+          );
+          profileBlob.id = legacyProfileItemId(usernameRef.current);
+
+          const rollback = async () => {
+            for (const original of originalItems) {
+              await persistCipherBlob(original, {
+                legacyMeta: sanitizeLegacyMeta(
+                  usernameRef.current,
+                  original.meta as Record<string, unknown> | undefined,
+                  currentProfile.keyVersion
+                ),
+              });
+            }
+          };
+
+          try {
+            for (const rotated of rotatedItems) {
+              await persistCipherBlob(rotated, {
+                legacyMeta: sanitizeLegacyMeta(
+                  usernameRef.current,
+                  rotated.meta as Record<string, unknown> | undefined,
+                  nextProfile.keyVersion
+                ),
+              });
+            }
+
+            await persistCipherBlob(profileBlob, {
+              legacyMeta: sanitizeLegacyMeta(
+                usernameRef.current,
+                profileBlob.meta as Record<string, unknown> | undefined,
+                nextProfile.keyVersion
+              ),
+            });
+          } catch (error) {
+            try {
+              await rollback();
+            } catch {
+              // Best-effort rollback; preserve the original error below.
+            }
+            throw error;
+          }
+
+          zeroize(oldKeyBytes);
+          keyBytesRef.current = nextKeyBytes;
+          profileRef.current = nextProfile;
+          modeRef.current = "legacy";
+          setVaultProfile(nextProfile);
+          setVaultMode("legacy");
+          setReady(true);
+
+          return nextProfile;
+        } catch (error) {
+          zeroize(nextKeyBytes);
+          throw error;
+        }
+      }
+
+      if (!currentProfile) {
         throw new Error("Vault profile is unavailable.");
       }
 
@@ -288,7 +535,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
           const rotated = await encryptEntryBytes(
             plaintextBytes,
             nextKeyBytes,
-            sanitizeSecureMeta(item.meta, profile.keyVersion + 1)
+            sanitizeSecureMeta(item.meta, currentProfile.keyVersion + 1)
           );
 
           if (item.id) {
@@ -333,7 +580,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
     },
-    [authorizedFetch, listItems, requireKeyBytes]
+    [authorizedFetch, listItems, persistCipherBlob, requireKeyBytes]
   );
 
   const value = useMemo<Ctx>(
@@ -341,7 +588,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       isReady,
       vaultProfile,
       vaultMode,
-      supportsKeyRotation: vaultMode === "tokenized",
+      supportsKeyRotation: vaultMode !== null,
       setLegacyMasterPassword,
       unlockVault,
       encryptOnly,
