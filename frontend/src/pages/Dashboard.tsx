@@ -75,7 +75,7 @@ export default function Dashboard({
 
               <div className="dashboard-grid">
                 <div className="grid-col-2">
-                  <RecentPasswords />
+                  <RecentPasswords currentUser={username} />
                 </div>
                 <div className="grid-col-1">
                   <ActivityFeed />
@@ -105,7 +105,10 @@ export default function Dashboard({
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              <ClientVault currentUser={username} searchQuery={vaultSearchQuery} />
+              <ClientVault
+                currentUser={username}
+                searchQuery={vaultSearchQuery}
+              />
             </div>
           )}
 
