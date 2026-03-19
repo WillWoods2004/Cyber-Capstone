@@ -6,6 +6,8 @@ import MFAVerify from "./pages/MFAVerify";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import SessionTimeout from "./SessionTimeout";
+import { useCrypto } from "./crypto/CryptoProvider";
+import { clearSessionTokens } from "./auth/session";
 
 type Screen = "login" | "register" | "mfa" | "dashboard";
 type Theme = "light" | "dark";
@@ -14,19 +16,23 @@ const SESSION_TIMEOUT_MS = 90_000;
 const SESSION_WARNING_MS = 30_000;
 
 function App() {
+  const { clearKey } = useCrypto();
   const [screen, setScreen] = useState<Screen>("login");
-  const [currentUser, setCurrentUser] = useState<string>("");
-  const [mfaEnabled, setMfaEnabled] = useState<boolean>(false);
-  const [lastRegisteredUsername, setLastRegisteredUsername] =
-    useState<string>("");
-  const [sessionWarningVisible, setSessionWarningVisible] =
-    useState<boolean>(false);
-  const [sessionTimedOut, setSessionTimedOut] = useState<boolean>(false);
+  const [currentUser, setCurrentUser] = useState("");
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [lastRegisteredUsername, setLastRegisteredUsername] = useState("");
+  const [sessionWarningVisible, setSessionWarningVisible] = useState(false);
+  const [sessionTimedOut, setSessionTimedOut] = useState(false);
 
   const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "light";
+    if (typeof window === "undefined") {
+      return "light";
+    }
+
     const saved = localStorage.getItem("theme");
-    if (saved === "light" || saved === "dark") return saved;
+    if (saved === "light" || saved === "dark") {
+      return saved;
+    }
 
     const prefersDark =
       window.matchMedia &&
@@ -40,65 +46,73 @@ function App() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme(theme === "light" ? "dark" : "light");
-  };
+  function resetSessionState({ keepRegisteredUsername = true }: { keepRegisteredUsername?: boolean } = {}) {
+    clearSessionTokens();
+    clearKey();
+    setCurrentUser("");
+    setMfaEnabled(false);
+    setSessionWarningVisible(false);
+    setSessionTimedOut(false);
 
-  const handlePasswordOk = (mfaFromApi: boolean, username: string) => {
+    if (!keepRegisteredUsername) {
+      setLastRegisteredUsername("");
+    }
+  }
+
+  function toggleTheme() {
+    setTheme(theme === "light" ? "dark" : "light");
+  }
+
+  function handlePasswordOk(mfaFromApi: boolean, username: string) {
     setCurrentUser(username);
     setMfaEnabled(mfaFromApi);
     setSessionTimedOut(false);
     setSessionWarningVisible(false);
     setScreen("mfa");
-  };
+  }
 
-  const handleMfaOk = () => {
+  function handleMfaOk() {
     setMfaEnabled(true);
     setSessionTimedOut(false);
     setSessionWarningVisible(false);
     setScreen("dashboard");
-  };
+  }
 
-  const handleShowRegister = () => {
-    setSessionWarningVisible(false);
+  function handleShowRegister() {
+    resetSessionState();
     setScreen("register");
-  };
+  }
 
-  const handleRegistered = (username: string) => {
+  function handleRegistered(username: string) {
+    resetSessionState({ keepRegisteredUsername: false });
     setLastRegisteredUsername(username);
-    setSessionWarningVisible(false);
     setScreen("login");
-  };
+  }
 
-  const handleCancelRegister = () => {
-    setSessionWarningVisible(false);
+  function handleCancelRegister() {
+    resetSessionState();
     setScreen("login");
-  };
+  }
 
-  const handleManualLogout = () => {
-    setCurrentUser("");
-    setMfaEnabled(false);
-    setSessionWarningVisible(false);
-    setSessionTimedOut(false);
+  function handleManualLogout() {
+    resetSessionState();
     setScreen("login");
-  };
+  }
 
-  const handleSessionWarning = () => {
+  function handleSessionWarning() {
     setSessionTimedOut(false);
     setSessionWarningVisible(true);
-  };
+  }
 
-  const handleSessionActive = () => {
+  function handleSessionActive() {
     setSessionWarningVisible(false);
-  };
+  }
 
-  const handleSessionTimeout = () => {
-    setCurrentUser("");
-    setMfaEnabled(false);
-    setSessionWarningVisible(false);
+  function handleSessionTimeout() {
+    resetSessionState();
     setSessionTimedOut(true);
     setScreen("login");
-  };
+  }
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
@@ -132,8 +146,8 @@ function App() {
           }}
         >
           {sessionTimedOut
-            ? "Your session has timed out"
-            : "Your session will expire in 30 seconds"}
+            ? "Your vault was locked after inactivity. Sign in again to continue."
+            : "Your vault will auto-lock in 30 seconds without activity."}
         </div>
       )}
 
@@ -157,20 +171,13 @@ function App() {
 
       {screen === "register" && (
         <div className="min-h-screen flex items-center justify-center">
-          <Register
-            onRegistered={handleRegistered}
-            onCancel={handleCancelRegister}
-          />
+          <Register onRegistered={handleRegistered} onCancel={handleCancelRegister} />
         </div>
       )}
 
       {screen === "mfa" && (
         <div className="min-h-screen flex items-center justify-center">
-          <MFAVerify
-            username={currentUser}
-            enrolled={mfaEnabled}
-            onMfaOk={handleMfaOk}
-          />
+          <MFAVerify username={currentUser} enrolled={mfaEnabled} onMfaOk={handleMfaOk} />
         </div>
       )}
 

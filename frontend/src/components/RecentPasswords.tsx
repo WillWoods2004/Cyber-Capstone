@@ -36,6 +36,30 @@ function timeAgo(iso?: string): string {
   return `${Math.floor(diff / 86400)} days ago`;
 }
 
+function getSavedTimestamp(item: CipherBlob): string | undefined {
+  return (item.meta?.savedAt as string | undefined) || (item.meta?.createdAt as string | undefined);
+}
+
+function belongsToCurrentUser(item: CipherBlob, currentUser: string): boolean {
+  const metaUserId = (item.meta?.userId as string | undefined) ?? "";
+  const metaUsername = (item.meta?.username as string | undefined) ?? "";
+  const metaLogin = (item.meta?.login as string | undefined) ?? "";
+
+  if (!currentUser.trim()) {
+    return true;
+  }
+
+  if (!metaUserId && !metaUsername && !metaLogin) {
+    return true;
+  }
+
+  return (
+    metaUserId === currentUser ||
+    metaUsername === currentUser ||
+    metaLogin === currentUser
+  );
+}
+
 export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
   const { listItems, decryptItem, isReady } = useCrypto();
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
@@ -43,37 +67,28 @@ export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady) {
+      setPasswords([]);
+      setLoading(false);
+      return;
+    }
 
     async function load() {
       setLoading(true);
       try {
         const items: CipherBlob[] = await listItems();
 
-        const userItems = items.filter((item) => {
-          const itemUserId = (item.meta?.userId as string | undefined) ?? "";
-          return itemUserId === currentUser;
-        });
+        const userItems = items.filter((item) => belongsToCurrentUser(item, currentUser));
 
         const sorted = [...userItems].sort((a, b) => {
-          const aTime = a.meta?.savedAt
-            ? new Date(a.meta.savedAt as string).getTime()
-            : a.meta?.createdAt
-            ? new Date(a.meta.createdAt as string).getTime()
-            : 0;
-
-          const bTime = b.meta?.savedAt
-            ? new Date(b.meta.savedAt as string).getTime()
-            : b.meta?.createdAt
-            ? new Date(b.meta.createdAt as string).getTime()
-            : 0;
-
+          const aTime = getSavedTimestamp(a) ? new Date(getSavedTimestamp(a) as string).getTime() : 0;
+          const bTime = getSavedTimestamp(b) ? new Date(getSavedTimestamp(b) as string).getTime() : 0;
           return bTime - aTime;
         });
 
         const recent = sorted.slice(0, 4);
-
         const entries: PasswordEntry[] = [];
+
         for (const item of recent) {
           try {
             const plaintext = await decryptItem(item);
@@ -82,29 +97,27 @@ export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
               username:
                 (item.meta?.username as string) ||
                 (item.meta?.login as string) ||
-                "—",
-              lastUsed: timeAgo(
-                (item.meta?.savedAt as string) ||
-                  (item.meta?.createdAt as string)
-              ),
+                "-",
+              lastUsed: timeAgo(getSavedTimestamp(item)),
               strength: getStrength(plaintext),
               plaintext,
             });
           } catch {
-            // skip items that fail to decrypt
+            // Skip items that fail to decrypt in the summary panel.
           }
         }
 
         setPasswords(entries);
       } catch (err) {
         console.error("RecentPasswords: failed to load", err);
+        setPasswords([]);
       } finally {
         setLoading(false);
       }
     }
 
-    load();
-  }, [isReady, listItems, decryptItem, currentUser]);
+    void load();
+  }, [decryptItem, isReady, listItems, currentUser]);
 
   const togglePassword = (idx: number) => {
     setShowPassword((prev) => ({ ...prev, [idx]: !prev[idx] }));
@@ -115,7 +128,6 @@ export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
       <div className="panel-header">
         <h3 className="panel-title">Recent Passwords</h3>
       </div>
-
       <div className="panel-content">
         <div className="password-list">
           {loading && (
@@ -123,35 +135,25 @@ export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
               Loading passwords...
             </p>
           )}
-
           {!loading && passwords.length === 0 && (
             <p style={{ color: "#6b7280", fontSize: "0.85rem", padding: "0.5rem 0" }}>
               No passwords saved yet.
             </p>
           )}
-
           {passwords.map((pwd, idx) => (
             <div key={idx} className="password-item">
               <div className="password-item-left">
-                <div className="password-avatar">🔒</div>
+                <div className="password-avatar">Lock</div>
                 <div>
                   <p className="password-site">{pwd.site}</p>
-                  <p className="password-username">
-                    {showPassword[idx] ? pwd.plaintext : pwd.username}
-                  </p>
+                  <p className="password-username">{showPassword[idx] ? pwd.plaintext : pwd.username}</p>
                 </div>
               </div>
-
               <div className="password-item-right">
-                <span className={`password-badge badge-${pwd.strength}`}>
-                  {pwd.strength}
-                </span>
+                <span className={`password-badge badge-${pwd.strength}`}>{pwd.strength}</span>
                 <span className="password-time">{pwd.lastUsed}</span>
-                <button
-                  className="password-toggle"
-                  onClick={() => togglePassword(idx)}
-                >
-                  {showPassword[idx] ? "🙈" : "👁️"}
+                <button className="password-toggle" onClick={() => togglePassword(idx)}>
+                  {showPassword[idx] ? "Hide" : "Show"}
                 </button>
               </div>
             </div>

@@ -44,10 +44,13 @@ export default function Register({ onRegistered, onCancel }: Props) {
         body: JSON.stringify({ username, password }),
       });
 
-      const data: any = await response.json().catch(() => ({}));
+      const data = await response.json().catch((): Record<string, unknown> => ({}));
 
       if (!response.ok || !data.success) {
-        setError(data.message || `Registration failed (status ${response.status}). Please try again.`);
+        setError(
+          (typeof data.message === "string" && data.message) ||
+            `Registration failed (status ${response.status}). Please try again.`
+        );
         return;
       }
 

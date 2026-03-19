@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
 import { VAULT_API_BASE } from "../config/api";
+import { getAuthToken } from "../auth/session";
 
 type VaultPanelProps = {
-  currentUser: string;
+  currentUser?: string;
   searchQuery?: string;
 };
 
@@ -19,6 +20,8 @@ type CryptoStage =
   | "retrieving"
   | "decrypting"
   | "decrypted"
+  | "rotating"
+  | "rotated"
   | "error";
 
 const TIMELINE_STEPS = [
@@ -49,6 +52,10 @@ function stageLabel(stage: CryptoStage): string {
       return "Decrypting on client";
     case "decrypted":
       return "Decryption complete";
+    case "rotating":
+      return "Rotating vault key";
+    case "rotated":
+      return "Vault key rotated";
     case "error":
       return "Crypto error";
     default:
@@ -64,6 +71,8 @@ function stageToStep(stage: CryptoStage): number {
       return 2;
     case "storing":
     case "stored":
+    case "rotating":
+    case "rotated":
       return 3;
     case "retrieving":
       return 4;
@@ -77,7 +86,10 @@ function stageToStep(stage: CryptoStage): number {
 }
 
 function base64ByteLength(b64?: string | null): number {
-  if (!b64) return 0;
+  if (!b64) {
+    return 0;
+  }
+
   try {
     return atob(b64).length;
   } catch {
@@ -86,9 +98,14 @@ function base64ByteLength(b64?: string | null): number {
 }
 
 function shannonEntropy(text?: string | null): number {
-  if (!text || text.length === 0) return 0;
+  if (!text || text.length === 0) {
+    return 0;
+  }
+
   const freq: Record<string, number> = {};
-  for (const ch of text) freq[ch] = (freq[ch] ?? 0) + 1;
+  for (const ch of text) {
+    freq[ch] = (freq[ch] ?? 0) + 1;
+  }
 
   const len = text.length;
   let entropy = 0;
@@ -96,32 +113,70 @@ function shannonEntropy(text?: string | null): number {
     const p = count / len;
     entropy -= p * Math.log2(p);
   }
+
   return entropy;
 }
 
+async function copyText(value: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "absolute";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+      return document.execCommand("copy");
+    } catch {
+      return false;
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  }
+}
+
 export default function VaultPanel({
-  currentUser,
+  currentUser = "",
   searchQuery = "",
 }: VaultPanelProps) {
-  const { isReady, encryptOnly, storeCipherBlob, listItems, decryptItem } = useCrypto();
+  const {
+    isReady,
+    supportsKeyRotation,
+    vaultProfile,
+    vaultMode,
+    encryptOnly,
+    storeCipherBlob,
+    listItems,
+    getItem,
+    decryptItem,
+    rotateVaultKey,
+  } = useCrypto();
+
   const [site, setSite] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [rotationMessage, setRotationMessage] = useState<string | null>(null);
   const [decrypted, setDecrypted] = useState<string | null>(null);
-  const [selectedMeta, setSelectedMeta] = useState<{
-    site?: string;
-    login?: string;
-  } | null>(null);
+  const [selectedMeta, setSelectedMeta] = useState<{ site?: string; login?: string } | null>(null);
+  const [showRotationPanel, setShowRotationPanel] = useState(false);
+  const [currentMasterPassword, setCurrentMasterPassword] = useState("");
+  const [newMasterPassword, setNewMasterPassword] = useState("");
+  const [confirmNewMasterPassword, setConfirmNewMasterPassword] = useState("");
 
   const [cryptoStage, setCryptoStage] = useState<CryptoStage>("idle");
   const [visualPlaintext, setVisualPlaintext] = useState<string | null>(null);
   const [visualCipher, setVisualCipher] = useState<CipherBlob | null>(null);
   const [visualDecrypted, setVisualDecrypted] = useState<string | null>(null);
   const [cryptoLog, setCryptoLog] = useState<string[]>([]);
-  const [payloadSnapshot, setPayloadSnapshot] = useState<string>("");
+  const [payloadSnapshot, setPayloadSnapshot] = useState("");
   const [showPayloadModal, setShowPayloadModal] = useState(false);
   const [ivReused, setIvReused] = useState<boolean | null>(null);
   const seenIvRef = useRef<Set<string>>(new Set());
@@ -148,56 +203,66 @@ export default function VaultPanel({
 
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return rows;
+    if (!query) {
+      return rows;
+    }
 
     return rows.filter((row) => {
-      const id = (row.id ?? "").toLowerCase();
-      const siteValue = String((row.meta as any)?.site ?? "").toLowerCase();
-      const loginValue = String((row.meta as any)?.login ?? "").toLowerCase();
-      const userIdValue = String((row.meta as any)?.userId ?? "").toLowerCase();
+      const meta = (row.meta as Record<string, unknown> | undefined) ?? {};
+      const haystack = [
+        row.id ?? "",
+        String(meta.site ?? ""),
+        String(meta.login ?? ""),
+        String(meta.username ?? ""),
+        String(meta.userId ?? ""),
+        String(meta.keyVersion ?? ""),
+      ]
+        .join(" ")
+        .toLowerCase();
 
-      return (
-        id.includes(query) ||
-        siteValue.includes(query) ||
-        loginValue.includes(query) ||
-        userIdValue.includes(query)
-      );
+      return haystack.includes(query);
     });
   }, [rows, searchQuery]);
 
-  function addLog(message: string) {
+  const addLog = useCallback((message: string) => {
     const stamp = new Date().toLocaleTimeString();
     setCryptoLog((prev) => [`${stamp} - ${message}`, ...prev].slice(0, 12));
+  }, []);
+
+  function clearRotationForm() {
+    setCurrentMasterPassword("");
+    setNewMasterPassword("");
+    setConfirmNewMasterPassword("");
   }
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setBusy(true);
     setErr(null);
+    setRotationMessage(null);
     setDecrypted(null);
     setSelectedMeta(null);
+
     try {
       const items = await listItems();
-      const filtered = items.filter((it) => {
-        const metaUser = (it.meta as any)?.userId as string | undefined;
-        if (!metaUser) return false;
-        return metaUser === currentUser;
-      });
-
-      setRows(filtered.map((it, i) => ({ ...it, _idx: i })));
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
+      setRows(items.map((item, index) => ({ ...item, _idx: index })));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setErr(message);
       setCryptoStage("error");
-      addLog(`Refresh failed: ${e.message ?? String(e)}`);
+      addLog(`Refresh failed: ${message}`);
     } finally {
       setBusy(false);
     }
-  }
+  }, [addLog, listItems]);
 
   async function save() {
-    if (!password.trim()) return;
+    if (!password.trim()) {
+      return;
+    }
 
     setBusy(true);
     setErr(null);
+    setRotationMessage(null);
     setVisualDecrypted(null);
     setVisualPlaintext(password);
     setCryptoStage("encrypting");
@@ -205,20 +270,29 @@ export default function VaultPanel({
     addLog("Encrypting plaintext in browser");
 
     try {
+      const savedAt = new Date().toISOString();
       const meta: Record<string, unknown> = {
-        createdAt: new Date().toISOString(),
-        userId: currentUser,
+        createdAt: savedAt,
+        savedAt,
       };
 
-      const siteVal = site.trim();
-      const loginVal = login.trim();
-      if (siteVal) meta.site = siteVal;
-      if (loginVal) meta.login = loginVal;
+      if (site.trim()) {
+        meta.site = site.trim();
+      }
+
+      if (login.trim()) {
+        meta.login = login.trim();
+        meta.username = login.trim();
+      } else if (currentUser.trim()) {
+        meta.username = currentUser.trim();
+      }
 
       const blob = await encryptOnly(password, meta);
       const reused = seenIvRef.current.has(blob.iv);
       setIvReused(reused);
-      if (!reused) seenIvRef.current.add(blob.iv);
+      if (!reused) {
+        seenIvRef.current.add(blob.iv);
+      }
 
       setVisualCipher(blob);
       setPayloadSnapshot(
@@ -254,125 +328,284 @@ export default function VaultPanel({
       setDecrypted(null);
       setSelectedMeta(null);
       await refresh();
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setErr(message);
       setCryptoStage("error");
-      addLog(`Save failed: ${e.message ?? String(e)}`);
+      addLog(`Save failed: ${message}`);
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleDecrypt(r: Row) {
+  async function handleDecrypt(row: Row) {
+    if (!row.id) {
+      return;
+    }
+
     setBusy(true);
     setErr(null);
+    setRotationMessage(null);
     setCryptoStage("retrieving");
-    setVisualCipher({ id: r.id, ct: r.ct, iv: r.iv, tag: r.tag, meta: r.meta });
     setVisualPlaintext(null);
-    setPayloadSnapshot(
-      JSON.stringify(
-        {
-          action: "DECRYPT_IN_BROWSER",
-          sourceItemId: r.id ?? null,
-          payload: {
-            ct: r.ct,
-            iv: r.iv,
-            tag: r.tag,
-            meta: r.meta ?? {},
-          },
-        },
-        null,
-        2
-      )
-    );
-
-    addLog(`Loaded ciphertext for item ${(r.id ?? "").slice(0, 8) || "-"}`);
+    addLog(`Loading ciphertext for item ${row.id.slice(0, 8)}`);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      setCryptoStage("decrypting");
-      addLog("Decrypting payload using in-memory key");
+      let freshItem: CipherBlob = row;
+      try {
+        freshItem = await getItem(row.id);
+      } catch {
+        addLog("Single-item fetch unavailable, decrypting cached row");
+      }
 
-      const plain = await decryptItem(r);
+      setVisualCipher(freshItem);
+      setPayloadSnapshot(
+        JSON.stringify(
+          {
+            action: "DECRYPT_IN_BROWSER",
+            sourceItemId: freshItem.id ?? null,
+            payload: {
+              ct: freshItem.ct,
+              iv: freshItem.iv,
+              tag: freshItem.tag,
+              meta: freshItem.meta ?? {},
+            },
+          },
+          null,
+          2
+        )
+      );
+
+      setCryptoStage("decrypting");
+      addLog("Decrypting payload using in-memory vault key");
+
+      const plain = await decryptItem(freshItem);
+      const meta = (freshItem.meta as Record<string, unknown> | undefined) ?? {};
+
       setDecrypted(plain);
       setSelectedMeta({
-        site: (r.meta as any)?.site,
-        login: (r.meta as any)?.login,
+        site: typeof meta.site === "string" ? meta.site : undefined,
+        login:
+          typeof meta.login === "string"
+            ? meta.login
+            : typeof meta.username === "string"
+              ? meta.username
+              : undefined,
       });
       setVisualDecrypted(plain);
       setCryptoStage("decrypted");
       addLog("Decryption completed in browser memory");
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setErr(message);
       setCryptoStage("error");
-      addLog(`Decrypt failed: ${e.message ?? String(e)}`);
+      addLog(`Decrypt failed: ${message}`);
     } finally {
       setBusy(false);
     }
   }
 
   async function remove(id?: string) {
-    if (!id) return;
+    if (!id) {
+      return;
+    }
+
     setBusy(true);
     setErr(null);
+    setRotationMessage(null);
+
     try {
-      const res = await fetch(`${VAULT_API_BASE}/vault/items/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 204) throw new Error(`Delete failed: ${res.status}`);
+      const token = getAuthToken();
+      const res = await fetch(`${VAULT_API_BASE}/vault/items/${id}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (!res.ok && res.status !== 204) {
+        throw new Error(`Delete failed: ${res.status}`);
+      }
+
       if (decrypted) {
         setDecrypted(null);
         setSelectedMeta(null);
       }
+
       addLog(`Deleted item ${id.slice(0, 8)}`);
       await refresh();
-    } catch (e: any) {
-      setErr(e.message ?? String(e));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setErr(message);
       setCryptoStage("error");
-      addLog(`Delete failed: ${e.message ?? String(e)}`);
+      addLog(`Delete failed: ${message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRotateKey() {
+    setErr(null);
+    setRotationMessage(null);
+
+    if (!currentMasterPassword.trim()) {
+      setErr("Current master password is required for rotation.");
+      return;
+    }
+
+    if (newMasterPassword.trim().length < 8) {
+      setErr("New master password must be at least 8 characters.");
+      return;
+    }
+
+    if (newMasterPassword !== confirmNewMasterPassword) {
+      setErr("New password confirmation does not match.");
+      return;
+    }
+
+    setBusy(true);
+    setCryptoStage("rotating");
+    addLog("Starting client-side vault key rotation");
+
+    try {
+      const nextProfile = await rotateVaultKey({
+        currentPassword: currentMasterPassword,
+        newPassword: newMasterPassword,
+      });
+
+      clearRotationForm();
+      setShowRotationPanel(false);
+      setRotationMessage(
+        `Vault key rotated successfully. Key version is now v${nextProfile.keyVersion}. Use your new master password the next time you sign in.`
+      );
+      setCryptoStage("rotated");
+      addLog(`Vault key rotated to version ${nextProfile.keyVersion}`);
+      await refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setErr(message);
+      setCryptoStage("error");
+      addLog(`Key rotation failed: ${message}`);
     } finally {
       setBusy(false);
     }
   }
 
   useEffect(() => {
-    if (isReady) void refresh();
-  }, [isReady, currentUser]);
+    if (isReady) {
+      void refresh();
+    }
+  }, [isReady, refresh]);
 
-  if (!isReady) return <div className="muted">Login to derive your vault key...</div>;
+  if (!isReady) {
+    return <div className="muted">Login to derive your vault key...</div>;
+  }
 
   return (
     <div className="vault">
+      <div className="vault-header">
+        <div>
+          <div className="vault-profile-label">Vault policy</div>
+          <div className="vault-profile-value">
+            AES-256-GCM, Argon2id, zero-knowledge sync, auto-lock enabled
+          </div>
+          {vaultMode === "legacy" && (
+            <div className="vault-profile-meta">Live API compatibility mode</div>
+          )}
+          {vaultProfile && (
+            <div className="vault-profile-meta">Key version v{vaultProfile.keyVersion}</div>
+          )}
+        </div>
+
+        {supportsKeyRotation ? (
+          <button
+            className="btn"
+            onClick={() => setShowRotationPanel((prev) => !prev)}
+            disabled={busy}
+          >
+            {showRotationPanel ? "Hide rotation" : "Rotate vault key"}
+          </button>
+        ) : (
+          <div className="vault-profile-meta">
+            Rotation requires the newer backend contract.
+          </div>
+        )}
+      </div>
+
+      {supportsKeyRotation && showRotationPanel && (
+        <div className="vault-rotation-panel">
+          <div className="vault-rotation-copy">
+            Re-encrypt every stored item client-side with a new Argon2id-derived key. The
+            server only receives new ciphertext.
+          </div>
+          <div className="vault-rotation-grid">
+            <input
+              className="vault-input"
+              type="password"
+              placeholder="Current master password"
+              value={currentMasterPassword}
+              onChange={(event) => setCurrentMasterPassword(event.target.value)}
+            />
+            <input
+              className="vault-input"
+              type="password"
+              placeholder="New master password"
+              value={newMasterPassword}
+              onChange={(event) => setNewMasterPassword(event.target.value)}
+            />
+            <input
+              className="vault-input"
+              type="password"
+              placeholder="Confirm new master password"
+              value={confirmNewMasterPassword}
+              onChange={(event) => setConfirmNewMasterPassword(event.target.value)}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={() => void handleRotateKey()}
+              disabled={busy}
+            >
+              Apply rotation
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="vault-toolbar">
         <input
-          className="vault-input"
+          className="vault-input vault-input-wide"
           placeholder="Website (e.g., gmail.com)"
           value={site}
-          onChange={(e) => setSite(e.target.value)}
+          onChange={(event) => setSite(event.target.value)}
         />
         <input
           className="vault-input"
           placeholder="Login / email (e.g., user@gmail.com)"
           value={login}
-          onChange={(e) => setLogin(e.target.value)}
+          onChange={(event) => setLogin(event.target.value)}
         />
         <input
           className="vault-input"
           type="password"
           placeholder="Password to encrypt"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(event) => setPassword(event.target.value)}
         />
-        <button className="btn btn-primary" onClick={save} disabled={busy || !password.trim()}>
+        <button
+          className="btn btn-primary"
+          onClick={() => void save()}
+          disabled={busy || !password.trim()}
+        >
           Save
         </button>
-        <button className="btn" onClick={refresh} disabled={busy}>
+        <button className="btn" onClick={() => void refresh()} disabled={busy}>
           Refresh
         </button>
       </div>
 
       {err && <div className="error">{err}</div>}
+      {rotationMessage && <div className="vault-success">{rotationMessage}</div>}
       <div className="muted small" style={{ marginBottom: 8 }}>
-        Password is required. Site/login are optional but recommended so you can
-        recognize the entry.
+        Password is required. Site/login are optional but recommended so you can recognize
+        the entry. Plaintext stays in browser memory and only ciphertext is synced.
       </div>
 
       <div className="crypto-visualizer">
@@ -390,27 +623,26 @@ export default function VaultPanel({
               {(cryptoStage === "encrypting" ||
                 cryptoStage === "decrypting" ||
                 cryptoStage === "storing" ||
-                cryptoStage === "retrieving") && <span className="crypto-pulse" />}
+                cryptoStage === "retrieving" ||
+                cryptoStage === "rotating") && <span className="crypto-pulse" />}
               {stageLabel(cryptoStage)}
             </span>
           </div>
         </div>
 
         <div className="crypto-timeline" aria-label="encryption timeline">
-          {TIMELINE_STEPS.map((step, idx) => (
+          {TIMELINE_STEPS.map((step, index) => (
             <div
               key={step}
-              className={`crypto-step ${idx <= activeStep ? "crypto-step-active" : ""} ${
-                idx === activeStep ? "crypto-step-current" : ""
+              className={`crypto-step ${index <= activeStep ? "crypto-step-active" : ""} ${
+                index === activeStep ? "crypto-step-current" : ""
               }`}
             >
-              <div className="crypto-step-dot">{idx + 1}</div>
+              <div className="crypto-step-dot">{index + 1}</div>
               <div className="crypto-step-label">{step}</div>
-              {idx < TIMELINE_STEPS.length - 1 && (
+              {index < TIMELINE_STEPS.length - 1 && (
                 <div
-                  className={`crypto-step-line ${
-                    idx < activeStep ? "crypto-step-line-active" : ""
-                  }`}
+                  className={`crypto-step-line ${index < activeStep ? "crypto-step-line-active" : ""}`}
                 />
               )}
             </div>
@@ -483,8 +715,8 @@ export default function VaultPanel({
             <div className="muted small">No crypto actions yet.</div>
           ) : (
             <div className="crypto-log-lines">
-              {cryptoLog.map((line, i) => (
-                <div key={`${line}-${i}`} className="crypto-log-line">
+              {cryptoLog.map((line, index) => (
+                <div key={`${line}-${index}`} className="crypto-log-line">
                   {line}
                 </div>
               ))}
@@ -506,44 +738,59 @@ export default function VaultPanel({
               <th style={{ width: 160 }}>ID</th>
               <th>Site</th>
               <th>User / Email</th>
+              <th>Key version</th>
               <th style={{ width: 180 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="muted">
+                <td colSpan={5} className="muted">
                   {searchQuery.trim() ? "No matching items found." : "No items yet."}
                 </td>
               </tr>
             ) : (
-              filteredRows.map((r) => (
-                <tr key={r.id ?? r._idx}>
-                  <td className="vault-id" title={r.id ?? ""}>
-                    {(r.id ?? "").slice(0, 8) || "-"}
-                  </td>
-                  <td className="vault-meta">{(r.meta as any)?.site ?? "-"}</td>
-                  <td className="vault-meta">{(r.meta as any)?.login ?? "-"}</td>
-                  <td className="vault-actions">
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => void handleDecrypt(r)}
-                      disabled={busy}
-                    >
-                      Decrypt
-                    </button>
-                    {r.id && (
+              filteredRows.map((row) => {
+                const meta = (row.meta as Record<string, unknown> | undefined) ?? {};
+                const loginValue =
+                  (typeof meta.login === "string" && meta.login) ||
+                  (typeof meta.username === "string" && meta.username) ||
+                  "-";
+                const keyVersion = meta.keyVersion;
+
+                return (
+                  <tr key={row.id ?? row._idx}>
+                    <td className="vault-id" title={row.id ?? ""}>
+                      {(row.id ?? "").slice(0, 8) || "-"}
+                    </td>
+                    <td className="vault-meta">
+                      {(typeof meta.site === "string" && meta.site) || "-"}
+                    </td>
+                    <td className="vault-meta">{loginValue}</td>
+                    <td className="vault-meta">
+                      v{typeof keyVersion === "number" || typeof keyVersion === "string" ? String(keyVersion) : "-"}
+                    </td>
+                    <td className="vault-actions">
                       <button
-                        className="btn btn-danger"
-                        onClick={() => remove(r.id)}
+                        className="btn btn-primary"
+                        onClick={() => void handleDecrypt(row)}
                         disabled={busy}
                       >
-                        Delete
+                        Decrypt
                       </button>
-                    )}
-                  </td>
-                </tr>
-              ))
+                      {row.id && (
+                        <button
+                          className="btn btn-danger"
+                          onClick={() => void remove(row.id)}
+                          disabled={busy}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -560,11 +807,8 @@ export default function VaultPanel({
             <button
               className="btn"
               onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(decrypted);
-                } catch {
-                  // ignore clipboard failures
-                }
+                const ok = await copyText(decrypted);
+                addLog(ok ? "Copied decrypted password to clipboard" : "Clipboard copy failed");
               }}
             >
               Copy
@@ -575,7 +819,7 @@ export default function VaultPanel({
 
       {showPayloadModal && (
         <div className="crypto-modal-backdrop" onClick={() => setShowPayloadModal(false)}>
-          <div className="crypto-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="crypto-modal" onClick={(event) => event.stopPropagation()}>
             <div className="crypto-modal-header">
               <h3>Cipher Payload Inspector</h3>
               <button className="btn" onClick={() => setShowPayloadModal(false)}>
@@ -589,12 +833,9 @@ export default function VaultPanel({
               <button
                 className="btn"
                 onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(payloadSnapshot);
-                    addLog("Copied payload JSON to clipboard");
-                  } catch {
-                    addLog("Payload copy failed");
-                  }
+                  if (!payloadSnapshot) return;
+                  const ok = await copyText(payloadSnapshot);
+                  addLog(ok ? "Copied payload JSON to clipboard" : "Payload copy failed");
                 }}
                 disabled={!payloadSnapshot}
               >

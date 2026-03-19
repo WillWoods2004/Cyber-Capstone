@@ -1,12 +1,12 @@
 import VaultPanel from "../components/VaultPanel";
 
 type ClientVaultProps = {
-  currentUser: string;
+  currentUser?: string;
   searchQuery?: string;
 };
 
 export default function ClientVault({
-  currentUser,
+  currentUser = "",
   searchQuery = "",
 }: ClientVaultProps) {
   return (

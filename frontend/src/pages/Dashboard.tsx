@@ -87,6 +87,7 @@ export default function Dashboard({
                   <QuickActions
                     onGeneratePassword={() => setActiveView("generator")}
                     onAddPassword={() => setActiveView("clientVault")}
+                    onExportPasswords={() => setActiveView("clientVault")}
                     onRunAudit={() => setActiveView("security")}
                   />
                 </div>
@@ -105,10 +106,7 @@ export default function Dashboard({
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              <ClientVault
-                currentUser={username}
-                searchQuery={vaultSearchQuery}
-              />
+              <ClientVault currentUser={username} searchQuery={vaultSearchQuery} />
             </div>
           )}
 

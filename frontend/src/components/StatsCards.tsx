@@ -13,6 +13,26 @@ type StatsCardsProps = {
   currentUser: string;
 };
 
+function belongsToCurrentUser(item: CipherBlob, currentUser: string): boolean {
+  const metaUserId = (item.meta?.userId as string | undefined) ?? "";
+  const metaUsername = (item.meta?.username as string | undefined) ?? "";
+  const metaLogin = (item.meta?.login as string | undefined) ?? "";
+
+  if (!currentUser.trim()) {
+    return true;
+  }
+
+  if (!metaUserId && !metaUsername && !metaLogin) {
+    return true;
+  }
+
+  return (
+    metaUserId === currentUser ||
+    metaUsername === currentUser ||
+    metaLogin === currentUser
+  );
+}
+
 function isWeakPassword(password: string): boolean {
   if (password.length < 8) return true;
   const hasUpper = /[A-Z]/.test(password);
@@ -49,10 +69,7 @@ export default function StatsCards({ currentUser }: StatsCardsProps) {
       try {
         const items: CipherBlob[] = await listItems();
 
-        const userItems = items.filter((item) => {
-          const itemUserId = (item.meta?.userId as string | undefined) ?? "";
-          return itemUserId === currentUser;
-        });
+        const userItems = items.filter((item) => belongsToCurrentUser(item, currentUser));
 
         let weak = 0;
         let expiringSoon = 0;

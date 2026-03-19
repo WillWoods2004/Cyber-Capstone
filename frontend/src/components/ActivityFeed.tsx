@@ -12,19 +12,27 @@ type ActivityItem = {
 function timeAgo(iso?: string): string {
   if (!iso) return "Unknown";
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60)    return "Just now";
-  if (diff < 3600)  return `${Math.floor(diff / 60)} minutes ago`;
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
   return `${Math.floor(diff / 86400)} days ago`;
+}
+
+function getSavedTimestamp(item: CipherBlob): string | undefined {
+  return (item.meta?.savedAt as string | undefined) || (item.meta?.createdAt as string | undefined);
 }
 
 export default function ActivityFeed() {
   const { listItems, isReady } = useCrypto();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [loading, setLoading]       = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady) {
+      setActivities([]);
+      setLoading(false);
+      return;
+    }
 
     async function load() {
       setLoading(true);
@@ -32,44 +40,45 @@ export default function ActivityFeed() {
         const items: CipherBlob[] = await listItems();
 
         const events: ActivityItem[] = items
-          .filter((item) => item.meta?.savedAt)
+          .filter((item) => getSavedTimestamp(item))
           .sort((a, b) => {
-            const aTime = new Date(a.meta!.savedAt as string).getTime();
-            const bTime = new Date(b.meta!.savedAt as string).getTime();
+            const aTime = new Date(getSavedTimestamp(a) as string).getTime();
+            const bTime = new Date(getSavedTimestamp(b) as string).getTime();
             return bTime - aTime;
           })
           .slice(0, 5)
           .map((item) => ({
             action: "Password added",
             detail: (item.meta?.site as string) || "Unknown site",
-            time:   timeAgo(item.meta?.savedAt as string),
-            icon:   "➕",
+            time: timeAgo(getSavedTimestamp(item)),
+            icon: "Add",
           }));
 
         if (events.length === 0 && items.length > 0) {
           events.push({
             action: "Vault loaded",
             detail: `${items.length} passwords in your vault`,
-            time:   "Just now",
-            icon:   "🔒",
+            time: "Just now",
+            icon: "Lock",
           });
         }
 
         setActivities(events);
       } catch (err) {
         console.error("ActivityFeed: failed to load", err);
+        setActivities([]);
       } finally {
         setLoading(false);
       }
     }
 
-    load();
+    void load();
   }, [isReady, listItems]);
 
   return (
     <div className="panel">
       <div className="panel-header">
-        <span className="panel-icon">📊</span>
+        <span className="panel-icon">Activity</span>
         <h3 className="panel-title">Recent Activity</h3>
       </div>
       <div className="panel-content">

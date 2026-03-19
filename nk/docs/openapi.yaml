@@ -1,29 +1,161 @@
 openapi: 3.0.3
-info: { title: SecurityPass API, version: 0.1.0 }
+info:
+  title: SecurityPass Local API
+  version: 0.2.0
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  schemas:
+    VaultProfile:
+      type: object
+      required: [salt, keyVersion]
+      properties:
+        salt:
+          type: string
+        keyVersion:
+          type: integer
+    CipherItem:
+      type: object
+      required: [ct, iv, tag]
+      properties:
+        id:
+          type: string
+          format: uuid
+        ct:
+          type: string
+        iv:
+          type: string
+        tag:
+          type: string
+        meta:
+          type: object
+          additionalProperties: true
+    LoginResponse:
+      type: object
+      required: [success, mfaEnabled, challengeToken, vaultProfile]
+      properties:
+        success:
+          type: boolean
+        mfaEnabled:
+          type: boolean
+        challengeToken:
+          type: string
+        vaultProfile:
+          $ref: "#/components/schemas/VaultProfile"
 paths:
   /healthz:
-    get: { responses: { "200": { description: ok } } }
+    get:
+      responses:
+        "200":
+          description: ok
+  /register:
+    post:
+      responses:
+        "201":
+          description: registration succeeded
+  /login:
+    post:
+      responses:
+        "200":
+          description: password accepted and MFA challenge issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+  /mfa/setup:
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: MFA enrollment secret issued
+  /mfa/verify:
+    post:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: MFA verified and vault auth token issued
+  /vault/profile:
+    get:
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: current user's vault KDF metadata
   /vault/items:
     get:
-      responses: { "200": { description: list of ciphertext items } }
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: authenticated user's ciphertext items
     post:
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CipherItem"
+      responses:
+        "201":
+          description: created ciphertext item
+  /vault/items/{id}:
+    get:
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ciphertext item owned by caller
+        "404":
+          description: item not found or not owned by caller
+    delete:
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: deleted
+        "404":
+          description: item not found or not owned by caller
+  /vault/rotate-key:
+    post:
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [ct, iv, tag]
+              required: [currentPassword, newPassword, newVaultSalt, items]
               properties:
-                ct:  { type: string }
-                iv:  { type: string }
-                tag: { type: string }
-                meta:{ type: object, additionalProperties: true }
-      responses: { "201": { description: created ciphertext item } }
-  /vault/items/{id}:
-    get:
-      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
-      responses: { "200": { description: item }, "404": { description: not found } }
-    delete:
-      parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
-      responses: { "204": { description: deleted } }
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                newVaultSalt:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/CipherItem"
+      responses:
+        "200":
+          description: all user items re-encrypted under a new vault key version

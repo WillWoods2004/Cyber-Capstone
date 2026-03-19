@@ -183,10 +183,13 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
     if (!password) return;
 
     try {
+      const savedAt = new Date().toISOString();
       await encryptAndStore(password, {
         userId: currentUser,
         label: "generated",
-        createdAt: new Date().toISOString(),
+        createdAt: savedAt,
+        savedAt,
+        username: currentUser,
         length: options.length,
         lower: options.useLower,
         upper: options.useUpper,
@@ -197,8 +200,9 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
       clearGeneratedPasswordTimers();
       setTimeoutMessage("");
       alert("Saved to vault.");
-    } catch (e: any) {
-      alert(`Save failed: ${e?.message ?? String(e)}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      alert(`Save failed: ${message}`);
     }
   };
 

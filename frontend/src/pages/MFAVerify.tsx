@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ErrorBox } from "../components/Error";
 import { AUTH_API_BASE } from "../config/api";
+import { clearChallengeToken, getChallengeToken, saveAuthToken } from "../auth/session";
 
 interface Props {
   username: string;
@@ -15,44 +16,55 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const [qrUrl, setQrUrl] = useState<string>("");
-  const [secret, setSecret] = useState<string>("");
-  const [mockCodeHint, setMockCodeHint] = useState<string>("");
+  const [qrUrl, setQrUrl] = useState("");
+  const [secret, setSecret] = useState("");
+  const [mockCodeHint, setMockCodeHint] = useState("");
 
   useEffect(() => {
     const startSetup = async () => {
-      if (mode !== "setup") return;
+      if (mode !== "setup") {
+        return;
+      }
 
+      const challengeToken = getChallengeToken();
       setError("");
       setLoading(true);
 
       try {
-        const response = await fetch(`${AUTH_API_BASE}/mfa/setup`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ username }),
-        });
+        const requestInit: RequestInit = challengeToken
+          ? {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${challengeToken}`,
+              },
+            }
+          : {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ username }),
+            };
 
-        const data: any = await response.json().catch(() => ({}));
+        const response = await fetch(`${AUTH_API_BASE}/mfa/setup`, requestInit);
 
+        const data = await response.json().catch((): Record<string, unknown> => ({}));
         if (!response.ok || !data.success) {
-          setError(data.message || "Failed to start MFA setup. Please try again or contact support.");
+          setError(
+            (typeof data.message === "string" && data.message) ||
+              "Failed to start MFA setup. Please try again or contact support."
+          );
           return;
         }
 
         const otpAuthUrl: string = data.otpAuthUrl || data.otpauthUrl || "";
-
-        const secretBase32: string = data.secret || "";
-        setSecret(secretBase32);
+        setSecret(typeof data.secret === "string" ? data.secret : "");
         setMockCodeHint(typeof data.mockCode === "string" ? data.mockCode : "");
 
         if (otpAuthUrl) {
-          const url =
-            "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(otpAuthUrl);
-          setQrUrl(url);
+          setQrUrl(
+            `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(otpAuthUrl)}`
+          );
         }
       } catch (err) {
         console.error("MFA setup network error:", err);
@@ -62,11 +74,11 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
       }
     };
 
-    startSetup();
-  }, [mode, username]);
+    void startSetup();
+  }, [mode]);
 
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleVerify = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError("");
 
     if (!code.trim()) {
@@ -74,24 +86,45 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
       return;
     }
 
+    const challengeToken = getChallengeToken();
+
     try {
       setLoading(true);
 
-      const response = await fetch(`${AUTH_API_BASE}/mfa/verify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, code }),
-      });
+      const requestInit: RequestInit = challengeToken
+        ? {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${challengeToken}`,
+            },
+            body: JSON.stringify({ code }),
+          }
+        : {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ username, code }),
+          };
 
-      const data: any = await response.json().catch(() => ({}));
+      const response = await fetch(`${AUTH_API_BASE}/mfa/verify`, requestInit);
 
+      const data = await response.json().catch((): Record<string, unknown> => ({}));
       if (!response.ok || !data.success) {
-        setError(data.message || "Invalid MFA code. Please try again.");
+        setError((typeof data.message === "string" && data.message) || "Invalid MFA code. Please try again.");
         return;
       }
 
+      if (challengeToken && (typeof data.authToken !== "string" || !data.authToken)) {
+        setError("MFA completed but the vault session token was missing. Sign in again.");
+        return;
+      }
+
+      if (typeof data.authToken === "string" && data.authToken) {
+        saveAuthToken(data.authToken);
+      }
+      clearChallengeToken();
       onMfaOk();
     } catch (err) {
       console.error("MFA verify network error:", err);
@@ -153,14 +186,15 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
 
         <form onSubmit={handleVerify} className="auth-form">
           <div className="form-field">
+            <label>MFA code for {username}</label>
             <input
               type="text"
               inputMode="numeric"
               maxLength={6}
-              className="text-center tracking-[0.4em]"
               placeholder="123456"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(event) => setCode(event.target.value)}
+              className="mfa-input"
             />
           </div>
 
@@ -172,4 +206,3 @@ export default function MFAVerify({ username, enrolled, onMfaOk }: Props) {
     </div>
   );
 }
-
