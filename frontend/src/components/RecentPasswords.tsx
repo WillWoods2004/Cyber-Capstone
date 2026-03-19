@@ -10,10 +10,6 @@ type PasswordEntry = {
   plaintext: string;
 };
 
-type RecentPasswordsProps = {
-  onViewAll?: () => void;
-};
-
 function getStrength(password: string): "strong" | "medium" | "weak" {
   const hasUpper = /[A-Z]/.test(password);
   const hasLower = /[a-z]/.test(password);
@@ -21,7 +17,6 @@ function getStrength(password: string): "strong" | "medium" | "weak" {
   const hasSpecial = /[^A-Za-z0-9]/.test(password);
   const long = password.length >= 12;
   const score = [hasUpper, hasLower, hasNumber, hasSpecial, long].filter(Boolean).length;
-
   if (score >= 4) return "strong";
   if (score >= 2) return "medium";
   return "weak";
@@ -36,7 +31,7 @@ function timeAgo(iso?: string): string {
   return `${Math.floor(diff / 86400)} days ago`;
 }
 
-export default function RecentPasswords({ onViewAll }: RecentPasswordsProps) {
+export default function RecentPasswords() {
   const { listItems, decryptItem, isReady } = useCrypto();
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [showPassword, setShowPassword] = useState<{ [key: number]: boolean }>({});
@@ -99,9 +94,6 @@ export default function RecentPasswords({ onViewAll }: RecentPasswordsProps) {
     <div className="panel">
       <div className="panel-header">
         <h3 className="panel-title">Recent Passwords</h3>
-        <button className="panel-link" onClick={onViewAll}>
-          View All →
-        </button>
       </div>
 
       <div className="panel-content">
