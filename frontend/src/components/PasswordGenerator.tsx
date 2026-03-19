@@ -18,6 +18,9 @@ const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const NUMBERS = "0123456789";
 const SYMBOLS = "!@#$%^&*()-_=+[]{};:,.<>?";
 
+const GENERATED_PASSWORD_TIMEOUT_MS = 2 * 60 * 1000;
+const WARNING_BEFORE_CLEAR_MS = 30 * 1000;
+
 function getRandomInt(max: number) {
   if (window.crypto && window.crypto.getRandomValues) {
     const buf = new Uint32Array(1);
@@ -47,13 +50,45 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
+  const [timeoutMessage, setTimeoutMessage] = useState("");
 
   const { encryptAndStore } = useCrypto();
+
   const clearClipboardTimeoutRef = useRef<number | null>(null);
   const clearMessageTimeoutRef = useRef<number | null>(null);
+  const warningTimeoutRef = useRef<number | null>(null);
+  const passwordClearTimeoutRef = useRef<number | null>(null);
+
+  const clearGeneratedPasswordTimers = () => {
+    if (warningTimeoutRef.current) {
+      window.clearTimeout(warningTimeoutRef.current);
+      warningTimeoutRef.current = null;
+    }
+    if (passwordClearTimeoutRef.current) {
+      window.clearTimeout(passwordClearTimeoutRef.current);
+      passwordClearTimeoutRef.current = null;
+    }
+  };
+
+  const startGeneratedPasswordTimer = () => {
+    clearGeneratedPasswordTimers();
+    setTimeoutMessage("");
+
+    warningTimeoutRef.current = window.setTimeout(() => {
+      setTimeoutMessage("Warning: this generated password will be removed in 30 seconds unless you save it.");
+    }, GENERATED_PASSWORD_TIMEOUT_MS - WARNING_BEFORE_CLEAR_MS);
+
+    passwordClearTimeoutRef.current = window.setTimeout(() => {
+      setPassword("");
+      setCopyMessage("");
+      setTimeoutMessage("Generated password was cleared for security because it was not saved in time.");
+    }, GENERATED_PASSWORD_TIMEOUT_MS);
+  };
 
   useEffect(() => {
     return () => {
+      clearGeneratedPasswordTimers();
+
       if (clearClipboardTimeoutRef.current) {
         window.clearTimeout(clearClipboardTimeoutRef.current);
       }
@@ -77,6 +112,8 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
   const generate = () => {
     setError("");
     setCopyMessage("");
+    setTimeoutMessage("");
+
     const pools: string[] = [];
 
     if (options.useLower) pools.push(LOWER);
@@ -87,6 +124,7 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
     if (pools.length === 0) {
       setError("Pick at least one character type.");
       setPassword("");
+      clearGeneratedPasswordTimers();
       return;
     }
 
@@ -104,6 +142,7 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
 
     const final = shuffle(chars).join("");
     setPassword(final);
+    startGeneratedPasswordTimer();
   };
 
   const copyToClipboard = async () => {
@@ -155,6 +194,8 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
         symbols: options.useSymbols,
       });
 
+      clearGeneratedPasswordTimers();
+      setTimeoutMessage("");
       alert("Saved to vault.");
     } catch (e: any) {
       alert(`Save failed: ${e?.message ?? String(e)}`);
@@ -219,6 +260,7 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
 
       {error && <div className="pwgen-error">{error}</div>}
       {copyMessage && <div className="pwgen-subtitle">{copyMessage}</div>}
+      {timeoutMessage && <div className="pwgen-error">{timeoutMessage}</div>}
 
       <div className="pwgen-actions">
         <button className="primary-btn" onClick={generate}>
