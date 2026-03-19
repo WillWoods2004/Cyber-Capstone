@@ -15,7 +15,6 @@ export default function Sidebar({
 }: SidebarProps) {
   const menuItems = [
     { id: "dashboard", icon: "🏠", label: "Dashboard" },
-    { id: "passwords", icon: "🔑", label: "Passwords" },
     { id: "generator", icon: "⚡", label: "Generator" },
     { id: "clientVault", icon: "🔐", label: "Client Vault" },
     { id: "security", icon: "🛡️", label: "Security" },
@@ -24,7 +23,6 @@ export default function Sidebar({
 
   return (
     <div className={`sidebar ${isOpen ? "sidebar-open" : "sidebar-closed"}`}>
-      {/* Logo & Toggle */}
       <div className="sidebar-header">
         {isOpen && <h1 className="sidebar-logo">SecureVault</h1>}
         <button className="sidebar-toggle" onClick={onToggle}>
@@ -32,7 +30,6 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* Navigation */}
       <nav className="sidebar-nav">
         {menuItems.map((item) => (
           <button
@@ -48,7 +45,6 @@ export default function Sidebar({
         ))}
       </nav>
 
-      {/* User Profile */}
       <div className="sidebar-footer">
         <div className="sidebar-user">
           <div className="sidebar-avatar">S</div>

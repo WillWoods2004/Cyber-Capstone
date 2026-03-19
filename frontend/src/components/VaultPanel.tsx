@@ -4,6 +4,11 @@ import type { CipherBlob } from "../crypto/crypto";
 import { VAULT_API_BASE } from "../config/api";
 import { getAuthToken } from "../auth/session";
 
+type VaultPanelProps = {
+  currentUser?: string;
+  searchQuery?: string;
+};
+
 type Row = CipherBlob & { _idx: number };
 
 type CryptoStage =
@@ -112,7 +117,33 @@ function shannonEntropy(text?: string | null): number {
   return entropy;
 }
 
-export default function VaultPanel() {
+async function copyText(value: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "absolute";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+      return document.execCommand("copy");
+    } catch {
+      return false;
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  }
+}
+
+export default function VaultPanel({
+  currentUser = "",
+  searchQuery = "",
+}: VaultPanelProps) {
   const {
     isReady,
     supportsKeyRotation,
@@ -169,6 +200,29 @@ export default function VaultPanel() {
       ciphertextEntropy,
     };
   }, [visualPlaintext, visualCipher]);
+
+  const filteredRows = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return rows;
+    }
+
+    return rows.filter((row) => {
+      const meta = (row.meta as Record<string, unknown> | undefined) ?? {};
+      const haystack = [
+        row.id ?? "",
+        String(meta.site ?? ""),
+        String(meta.login ?? ""),
+        String(meta.username ?? ""),
+        String(meta.userId ?? ""),
+        String(meta.keyVersion ?? ""),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [rows, searchQuery]);
 
   const addLog = useCallback((message: string) => {
     const stamp = new Date().toLocaleTimeString();
@@ -229,6 +283,8 @@ export default function VaultPanel() {
       if (login.trim()) {
         meta.login = login.trim();
         meta.username = login.trim();
+      } else if (currentUser.trim()) {
+        meta.username = currentUser.trim();
       }
 
       const blob = await encryptOnly(password, meta);
@@ -301,6 +357,7 @@ export default function VaultPanel() {
       } catch {
         addLog("Single-item fetch unavailable, decrypting cached row");
       }
+
       setVisualCipher(freshItem);
       setPayloadSnapshot(
         JSON.stringify(
@@ -323,10 +380,17 @@ export default function VaultPanel() {
       addLog("Decrypting payload using in-memory vault key");
 
       const plain = await decryptItem(freshItem);
+      const meta = (freshItem.meta as Record<string, unknown> | undefined) ?? {};
+
       setDecrypted(plain);
       setSelectedMeta({
-        site: (freshItem.meta as { site?: string } | undefined)?.site,
-        login: (freshItem.meta as { login?: string } | undefined)?.login,
+        site: typeof meta.site === "string" ? meta.site : undefined,
+        login:
+          typeof meta.login === "string"
+            ? meta.login
+            : typeof meta.username === "string"
+              ? meta.username
+              : undefined,
       });
       setVisualDecrypted(plain);
       setCryptoStage("decrypted");
@@ -447,25 +511,30 @@ export default function VaultPanel() {
             <div className="vault-profile-meta">Live API compatibility mode</div>
           )}
           {vaultProfile && (
-            <div className="vault-profile-meta">
-              Key version v{vaultProfile.keyVersion}
-            </div>
+            <div className="vault-profile-meta">Key version v{vaultProfile.keyVersion}</div>
           )}
         </div>
 
         {supportsKeyRotation ? (
-          <button className="btn" onClick={() => setShowRotationPanel((prev) => !prev)} disabled={busy}>
+          <button
+            className="btn"
+            onClick={() => setShowRotationPanel((prev) => !prev)}
+            disabled={busy}
+          >
             {showRotationPanel ? "Hide rotation" : "Rotate vault key"}
           </button>
         ) : (
-          <div className="vault-profile-meta">Rotation requires the newer backend contract.</div>
+          <div className="vault-profile-meta">
+            Rotation requires the newer backend contract.
+          </div>
         )}
       </div>
 
       {supportsKeyRotation && showRotationPanel && (
         <div className="vault-rotation-panel">
           <div className="vault-rotation-copy">
-            Re-encrypt every stored item client-side with a new Argon2id-derived key. The server only receives new ciphertext.
+            Re-encrypt every stored item client-side with a new Argon2id-derived key. The
+            server only receives new ciphertext.
           </div>
           <div className="vault-rotation-grid">
             <input
@@ -489,7 +558,11 @@ export default function VaultPanel() {
               value={confirmNewMasterPassword}
               onChange={(event) => setConfirmNewMasterPassword(event.target.value)}
             />
-            <button className="btn btn-primary" onClick={() => void handleRotateKey()} disabled={busy}>
+            <button
+              className="btn btn-primary"
+              onClick={() => void handleRotateKey()}
+              disabled={busy}
+            >
               Apply rotation
             </button>
           </div>
@@ -516,7 +589,11 @@ export default function VaultPanel() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
-        <button className="btn btn-primary" onClick={() => void save()} disabled={busy || !password.trim()}>
+        <button
+          className="btn btn-primary"
+          onClick={() => void save()}
+          disabled={busy || !password.trim()}
+        >
           Save
         </button>
         <button className="btn" onClick={() => void refresh()} disabled={busy}>
@@ -527,14 +604,19 @@ export default function VaultPanel() {
       {err && <div className="error">{err}</div>}
       {rotationMessage && <div className="vault-success">{rotationMessage}</div>}
       <div className="muted small" style={{ marginBottom: 8 }}>
-        Password is required. Site/login are optional but recommended so you can recognize the entry. Plaintext stays in browser memory and only ciphertext is synced.
+        Password is required. Site/login are optional but recommended so you can recognize
+        the entry. Plaintext stays in browser memory and only ciphertext is synced.
       </div>
 
       <div className="crypto-visualizer">
         <div className="crypto-head">
           <span className="crypto-title">Crypto Visualizer</span>
           <div className="crypto-head-right">
-            <button className="btn crypto-payload-btn" onClick={() => setShowPayloadModal(true)} disabled={!payloadSnapshot}>
+            <button
+              className="btn crypto-payload-btn"
+              onClick={() => setShowPayloadModal(true)}
+              disabled={!payloadSnapshot}
+            >
               View Payload JSON
             </button>
             <span className={`crypto-status crypto-status-${cryptoStage}`}>
@@ -559,7 +641,9 @@ export default function VaultPanel() {
               <div className="crypto-step-dot">{index + 1}</div>
               <div className="crypto-step-label">{step}</div>
               {index < TIMELINE_STEPS.length - 1 && (
-                <div className={`crypto-step-line ${index < activeStep ? "crypto-step-line-active" : ""}`} />
+                <div
+                  className={`crypto-step-line ${index < activeStep ? "crypto-step-line-active" : ""}`}
+                />
               )}
             </div>
           ))}
@@ -641,6 +725,12 @@ export default function VaultPanel() {
         </div>
       </div>
 
+      {searchQuery.trim() && (
+        <div className="muted small" style={{ marginBottom: 8 }}>
+          Search results for: <strong>{searchQuery}</strong>
+        </div>
+      )}
+
       <div className="vault-table-wrap">
         <table className="vault-table">
           <thead>
@@ -653,35 +743,54 @@ export default function VaultPanel() {
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 ? (
+            {filteredRows.length === 0 ? (
               <tr>
                 <td colSpan={5} className="muted">
-                  No items yet.
+                  {searchQuery.trim() ? "No matching items found." : "No items yet."}
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
-                <tr key={row.id ?? row._idx}>
-                  <td className="vault-id" title={row.id ?? ""}>
-                    {(row.id ?? "").slice(0, 8) || "-"}
-                  </td>
-                  <td className="vault-meta">{(row.meta as { site?: string } | undefined)?.site ?? "-"}</td>
-                  <td className="vault-meta">{(row.meta as { login?: string } | undefined)?.login ?? "-"}</td>
-                  <td className="vault-meta">
-                    v{String((row.meta as { keyVersion?: number } | undefined)?.keyVersion ?? "-")}
-                  </td>
-                  <td className="vault-actions">
-                    <button className="btn btn-primary" onClick={() => void handleDecrypt(row)} disabled={busy}>
-                      Decrypt
-                    </button>
-                    {row.id && (
-                      <button className="btn btn-danger" onClick={() => void remove(row.id)} disabled={busy}>
-                        Delete
+              filteredRows.map((row) => {
+                const meta = (row.meta as Record<string, unknown> | undefined) ?? {};
+                const loginValue =
+                  (typeof meta.login === "string" && meta.login) ||
+                  (typeof meta.username === "string" && meta.username) ||
+                  "-";
+                const keyVersion = meta.keyVersion;
+
+                return (
+                  <tr key={row.id ?? row._idx}>
+                    <td className="vault-id" title={row.id ?? ""}>
+                      {(row.id ?? "").slice(0, 8) || "-"}
+                    </td>
+                    <td className="vault-meta">
+                      {(typeof meta.site === "string" && meta.site) || "-"}
+                    </td>
+                    <td className="vault-meta">{loginValue}</td>
+                    <td className="vault-meta">
+                      v{typeof keyVersion === "number" || typeof keyVersion === "string" ? String(keyVersion) : "-"}
+                    </td>
+                    <td className="vault-actions">
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => void handleDecrypt(row)}
+                        disabled={busy}
+                      >
+                        Decrypt
                       </button>
-                    )}
-                  </td>
-                </tr>
-              ))
+                      {row.id && (
+                        <button
+                          className="btn btn-danger"
+                          onClick={() => void remove(row.id)}
+                          disabled={busy}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -693,15 +802,13 @@ export default function VaultPanel() {
             {selectedMeta?.site ?? "Item"} - {selectedMeta?.login ?? "login not set"}
           </div>
           <div>
-            <span className="muted">Decrypted password:</span> <code className="mono">{decrypted}</code>
+            <span className="muted">Decrypted password:</span>{" "}
+            <code className="mono">{decrypted}</code>
             <button
               className="btn"
               onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(decrypted);
-                } catch {
-                  // ignore clipboard failures
-                }
+                const ok = await copyText(decrypted);
+                addLog(ok ? "Copied decrypted password to clipboard" : "Clipboard copy failed");
               }}
             >
               Copy
@@ -719,17 +826,16 @@ export default function VaultPanel() {
                 Close
               </button>
             </div>
-            <pre className="crypto-modal-body">{payloadSnapshot || "No payload captured yet."}</pre>
+            <pre className="crypto-modal-body">
+              {payloadSnapshot || "No payload captured yet."}
+            </pre>
             <div className="crypto-modal-actions">
               <button
                 className="btn"
                 onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(payloadSnapshot);
-                    addLog("Copied payload JSON to clipboard");
-                  } catch {
-                    addLog("Payload copy failed");
-                  }
+                  if (!payloadSnapshot) return;
+                  const ok = await copyText(payloadSnapshot);
+                  addLog(ok ? "Copied payload JSON to clipboard" : "Payload copy failed");
                 }}
                 disabled={!payloadSnapshot}
               >

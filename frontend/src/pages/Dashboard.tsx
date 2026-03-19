@@ -19,7 +19,6 @@ type DashboardProps = {
 
 type ActiveView =
   | "dashboard"
-  | "passwords"
   | "generator"
   | "clientVault"
   | "security"
@@ -34,8 +33,16 @@ export default function Dashboard({
 }: DashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
+  const [vaultSearchQuery, setVaultSearchQuery] = useState("");
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
+
+  const handleSearch = (query: string) => {
+    setVaultSearchQuery(query);
+    if (query.trim()) {
+      setActiveView("clientVault");
+    }
+  };
 
   return (
     <div className="dashboard-container">
@@ -51,6 +58,7 @@ export default function Dashboard({
         <TopBar
           onAddPassword={() => setActiveView("clientVault")}
           onGeneratePassword={() => setActiveView("generator")}
+          onSearch={handleSearch}
         />
 
         <div className="dashboard-content">
@@ -98,28 +106,12 @@ export default function Dashboard({
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              <ClientVault />
-            </div>
-          )}
-
-          {activeView === "passwords" && (
-            <div className="passwords-page">
-              <h2 className="dashboard-title">All Passwords</h2>
-              <p className="dashboard-subtitle">Manage your stored passwords</p>
-
-              <div className="settings-card" style={{ marginTop: "20px" }}>
-                <h3 className="settings-section-title">Saved Passwords</h3>
-                <p className="settings-section-subtitle">
-                  Saved passwords will appear here. Use Client Vault to create,
-                  encrypt, and manage secure entries.
-                </p>
-              </div>
+              <ClientVault currentUser={username} searchQuery={vaultSearchQuery} />
             </div>
           )}
 
           {activeView === "security" && (
             <div className="security-page">
-              <h2 className="dashboard-title">Security Center</h2>
               <SecurityOverview expanded={true} />
             </div>
           )}

@@ -1,6 +1,14 @@
 import VaultPanel from "../components/VaultPanel";
 
-export default function ClientVault() {
+type ClientVaultProps = {
+  currentUser?: string;
+  searchQuery?: string;
+};
+
+export default function ClientVault({
+  currentUser = "",
+  searchQuery = "",
+}: ClientVaultProps) {
   return (
     <div className="client-vault-page">
       <div className="client-vault-header">
@@ -17,7 +25,7 @@ export default function ClientVault() {
 
       <div className="client-vault-grid">
         <div className="client-vault-card">
-          <VaultPanel />
+          <VaultPanel currentUser={currentUser} searchQuery={searchQuery} />
         </div>
       </div>
     </div>
