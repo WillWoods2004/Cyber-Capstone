@@ -1,155 +1,161 @@
-import { useState } from "react";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
-import StatsCards from "../components/StatsCards";
-import RecentPasswords from "../components/RecentPasswords";
-import ActivityFeed from "../components/ActivityFeed";
-import SecurityOverview from "../components/SecurityOverview";
-import QuickActions from "../components/QuickActions";
-import PasswordGenerator from "../components/PasswordGenerator";
-import ClientVault from "./ClientVault";
+import { useEffect, useState } from "react";
+import { useCrypto } from "../crypto/CryptoProvider";
+import type { CipherBlob } from "../crypto/crypto";
 
-type DashboardProps = {
+type PasswordEntry = {
+  site: string;
   username: string;
-  mfaEnabled: boolean;
-  onLogout?: () => void;
-  theme: "light" | "dark";
-  onToggleTheme: () => void;
+  lastUsed: string;
+  strength: "strong" | "medium" | "weak";
+  plaintext: string;
 };
 
-type ActiveView =
-  | "dashboard"
-  | "generator"
-  | "clientVault"
-  | "security"
-  | "settings";
+type RecentPasswordsProps = {
+  currentUser: string;
+};
 
-export default function Dashboard({
-  username,
-  mfaEnabled,
-  onLogout,
-  theme,
-  onToggleTheme,
-}: DashboardProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeView, setActiveView] = useState<ActiveView>("dashboard");
-  const [vaultSearchQuery, setVaultSearchQuery] = useState("");
+function getStrength(password: string): "strong" | "medium" | "weak" {
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+  const long = password.length >= 12;
+  const score = [hasUpper, hasLower, hasNumber, hasSpecial, long].filter(Boolean).length;
 
-  const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
+  if (score >= 4) return "strong";
+  if (score >= 2) return "medium";
+  return "weak";
+}
 
-  const handleSearch = (query: string) => {
-    setVaultSearchQuery(query);
-    if (query.trim()) {
-      setActiveView("clientVault");
+function timeAgo(iso?: string): string {
+  if (!iso) return "Unknown";
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+  return `${Math.floor(diff / 86400)} days ago`;
+}
+
+export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
+  const { listItems, decryptItem, isReady } = useCrypto();
+  const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
+  const [showPassword, setShowPassword] = useState<{ [key: number]: boolean }>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    async function load() {
+      setLoading(true);
+      try {
+        const items: CipherBlob[] = await listItems();
+
+        const userItems = items.filter((item) => {
+          const itemUserId = (item.meta?.userId as string | undefined) ?? "";
+          return itemUserId === currentUser;
+        });
+
+        const sorted = [...userItems].sort((a, b) => {
+          const aTime = a.meta?.savedAt
+            ? new Date(a.meta.savedAt as string).getTime()
+            : a.meta?.createdAt
+            ? new Date(a.meta.createdAt as string).getTime()
+            : 0;
+
+          const bTime = b.meta?.savedAt
+            ? new Date(b.meta.savedAt as string).getTime()
+            : b.meta?.createdAt
+            ? new Date(b.meta.createdAt as string).getTime()
+            : 0;
+
+          return bTime - aTime;
+        });
+
+        const recent = sorted.slice(0, 4);
+
+        const entries: PasswordEntry[] = [];
+        for (const item of recent) {
+          try {
+            const plaintext = await decryptItem(item);
+            entries.push({
+              site: (item.meta?.site as string) || "Unknown Site",
+              username:
+                (item.meta?.username as string) ||
+                (item.meta?.login as string) ||
+                "—",
+              lastUsed: timeAgo(
+                (item.meta?.savedAt as string) ||
+                  (item.meta?.createdAt as string)
+              ),
+              strength: getStrength(plaintext),
+              plaintext,
+            });
+          } catch {
+            // skip items that fail to decrypt
+          }
+        }
+
+        setPasswords(entries);
+      } catch (err) {
+        console.error("RecentPasswords: failed to load", err);
+      } finally {
+        setLoading(false);
+      }
     }
+
+    load();
+  }, [isReady, listItems, decryptItem, currentUser]);
+
+  const togglePassword = (idx: number) => {
+    setShowPassword((prev) => ({ ...prev, [idx]: !prev[idx] }));
   };
 
   return (
-    <div className="dashboard-container">
-      <Sidebar
-        isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
-        activeView={activeView}
-        onViewChange={(view) => setActiveView(view as ActiveView)}
-        username={username}
-      />
+    <div className="panel">
+      <div className="panel-header">
+        <h3 className="panel-title">Recent Passwords</h3>
+      </div>
 
-      <div className="dashboard-main">
-        <TopBar
-          onAddPassword={() => setActiveView("clientVault")}
-          onGeneratePassword={() => setActiveView("generator")}
-          onSearch={handleSearch}
-        />
-
-        <div className="dashboard-content">
-          {activeView === "dashboard" && (
-            <>
-              <div className="welcome-section">
-                <h2 className="dashboard-title">Welcome back, {username}!</h2>
-                <p className="dashboard-subtitle">
-                  You have successfully logged in {mfaEnabled ? "with MFA." : "."}
-                </p>
-              </div>
-
-              <StatsCards currentUser={username} />
-
-              <div className="dashboard-grid">
-                <div className="grid-col-2">
-                  <RecentPasswords currentUser={username} />
-                </div>
-                <div className="grid-col-1">
-                  <ActivityFeed />
-                </div>
-                <div className="grid-col-2">
-                  <SecurityOverview />
-                </div>
-                <div className="grid-col-1">
-                  <QuickActions
-                    onGeneratePassword={() => setActiveView("generator")}
-                    onAddPassword={() => setActiveView("clientVault")}
-                    onRunAudit={() => setActiveView("security")}
-                  />
-                </div>
-              </div>
-            </>
+      <div className="panel-content">
+        <div className="password-list">
+          {loading && (
+            <p style={{ color: "#6b7280", fontSize: "0.85rem", padding: "0.5rem 0" }}>
+              Loading passwords...
+            </p>
           )}
 
-          {activeView === "generator" && (
-            <div className="generator-page">
-              <h2 className="dashboard-title">Password Generator</h2>
-              <div className="generator-wrapper">
-                <PasswordGenerator currentUser={username} />
-              </div>
-            </div>
+          {!loading && passwords.length === 0 && (
+            <p style={{ color: "#6b7280", fontSize: "0.85rem", padding: "0.5rem 0" }}>
+              No passwords saved yet.
+            </p>
           )}
 
-          {activeView === "clientVault" && (
-            <div className="client-vault-wrapper">
-              <ClientVault
-                currentUser={username}
-                searchQuery={vaultSearchQuery}
-              />
-            </div>
-          )}
-
-          {activeView === "security" && (
-            <div className="security-page">
-              <SecurityOverview expanded={true} />
-            </div>
-          )}
-
-          {activeView === "settings" && (
-            <div className="settings-page">
-              <h2 className="dashboard-title">Settings</h2>
-              <p className="dashboard-subtitle">
-                Configure your account preferences
-              </p>
-
-              <div className="settings-layout">
-                <div className="settings-card">
-                  <h3 className="settings-section-title">Appearance</h3>
-                  <p className="settings-section-subtitle">
-                    Switch between light and dark themes.
+          {passwords.map((pwd, idx) => (
+            <div key={idx} className="password-item">
+              <div className="password-item-left">
+                <div className="password-avatar">🔒</div>
+                <div>
+                  <p className="password-site">{pwd.site}</p>
+                  <p className="password-username">
+                    {showPassword[idx] ? pwd.plaintext : pwd.username}
                   </p>
-                  <button className="theme-toggle" onClick={onToggleTheme}>
-                    {themeLabel}
-                  </button>
-                </div>
-
-                <div className="settings-card">
-                  <h3 className="settings-section-title">Account</h3>
-                  <p className="settings-section-subtitle">
-                    Sign out of your SecureVault session.
-                  </p>
-                  {onLogout && (
-                    <button className="logout-btn" onClick={onLogout}>
-                      Logout
-                    </button>
-                  )}
                 </div>
               </div>
+
+              <div className="password-item-right">
+                <span className={`password-badge badge-${pwd.strength}`}>
+                  {pwd.strength}
+                </span>
+                <span className="password-time">{pwd.lastUsed}</span>
+                <button
+                  className="password-toggle"
+                  onClick={() => togglePassword(idx)}
+                >
+                  {showPassword[idx] ? "🙈" : "👁️"}
+                </button>
+              </div>
             </div>
-          )}
+          ))}
         </div>
       </div>
     </div>
