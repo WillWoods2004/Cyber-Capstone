@@ -1,0 +1,126 @@
+name: nksf2-container-deploy
+
+on:
+  pull_request:
+    paths:
+      - "nk/api/**"
+      - "deploy/nksf2/**"
+      - "infra/terraform/nksf2/**"
+      - ".github/workflows/nksf2-container-deploy.yml"
+      - "scripts/ops/check-nksf2-assets.ps1"
+  push:
+    branches: [main]
+    paths:
+      - "nk/api/**"
+      - "deploy/nksf2/**"
+      - "infra/terraform/nksf2/**"
+      - ".github/workflows/nksf2-container-deploy.yml"
+      - "scripts/ops/check-nksf2-assets.ps1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verify-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nk/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: nk/api/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  verify-container-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static NKSF2 asset checks
+        shell: pwsh
+        run: ./scripts/ops/check-nksf2-assets.ps1
+      - uses: docker/setup-buildx-action@v3
+      - name: Build hardened API container
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nk/api
+          file: ./nk/api/Dockerfile
+          push: false
+          tags: securitypass-api:nksf2-ci
+
+  verify-terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform/nksf2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: [verify-api, verify-container-assets, verify-terraform]
+    runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_project_name: ${{ vars.PROJECT_NAME }}
+      TF_VAR_environment: ${{ vars.ENVIRONMENT }}
+      TF_VAR_vpc_id: ${{ vars.VPC_ID }}
+      TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
+      TF_VAR_private_subnet_ids: ${{ vars.PRIVATE_SUBNET_IDS }}
+      TF_VAR_certificate_arn: ${{ vars.CERTIFICATE_ARN }}
+      TF_VAR_allowed_ingress_cidrs: ${{ vars.ALLOWED_INGRESS_CIDRS }}
+      TF_VAR_cors_allowed_origins: ${{ vars.CORS_ALLOWED_ORIGINS }}
+      TF_VAR_ecr_repository_name: ${{ vars.ECR_REPOSITORY_NAME }}
+      TF_VAR_service_name: ${{ vars.SERVICE_NAME }}
+      TF_VAR_desired_count: ${{ vars.DESIRED_COUNT }}
+      TF_VAR_cpu: ${{ vars.TASK_CPU }}
+      TF_VAR_memory: ${{ vars.TASK_MEMORY }}
+    defaults:
+      run:
+        working-directory: infra/terraform/nksf2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+      - name: Terraform init
+        run: >
+          terraform init
+          -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}"
+          -backend-config="key=${{ secrets.TF_STATE_KEY }}"
+          -backend-config="region=${{ vars.AWS_REGION }}"
+          -backend-config="dynamodb_table=${{ secrets.TF_STATE_LOCK_TABLE }}"
+      - name: Bootstrap ECR repository
+        run: terraform apply -auto-approve -target=aws_ecr_repository.api
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Resolve ECR repository URI
+        id: ecr
+        shell: bash
+        run: |
+          repo_uri="$(aws ecr describe-repositories --repository-names "${TF_VAR_ecr_repository_name}" --query 'repositories[0].repositoryUri' --output text)"
+          echo "repo_uri=${repo_uri}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nk/api
+          file: ./nk/api/Dockerfile
+          push: true
+          tags: ${{ steps.ecr.outputs.repo_uri }}:${{ steps.ecr.outputs.image_tag }}
+      - name: Apply NKSF2 infrastructure and deploy image
+        run: terraform apply -auto-approve -var="image_tag=${{ steps.ecr.outputs.image_tag }}"

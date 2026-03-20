@@ -101,3 +101,26 @@ pwsh .\scripts\ops\assert-no-legacy-cloud-save.ps1
 ```
 
 Add `-CheckVaultHealth` when validating the local mock API (`http://localhost:8080`).
+
+## NKSF2 container deployment
+
+The repo now includes a dedicated NKSF2 deployment stack for the API:
+
+- `nk/api/Dockerfile`
+- `deploy/nksf2/docker-compose.yml`
+- `infra/terraform/nksf2`
+- `.github/workflows/nksf2-container-deploy.yml`
+
+Quick validation:
+
+```powershell
+pwsh .\scripts\ops\check-nksf2-assets.ps1
+```
+
+This checks that the NKSF2 assets exist and still include the expected hardening controls:
+
+- non-root container
+- Docker healthcheck
+- TLS 1.3-capable ALB policy
+- read-only filesystem in ECS task definition
+- automated container build + Terraform deploy workflow

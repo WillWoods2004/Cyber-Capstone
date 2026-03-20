@@ -1,6 +1,9 @@
 # NK slice (NKSF1 + NKSF2)
 
-This local slice is the proposal-aligned implementation for `NKSF1`.
+This slice now contains:
+
+- `NKSF1`: proposal-aligned encrypted vault flow
+- `NKSF2`: proposal-aligned containerized backend + hardened deployment assets
 
 - SDK: `nk/sdk`
   - Argon2id key derivation
@@ -17,6 +20,25 @@ This local slice is the proposal-aligned implementation for `NKSF1`.
   - auto-lock after inactivity
   - best-effort in-memory cleanup on logout/timeout
   - vault key rotation UI
+
+## NKSF2 deployment assets
+
+- Docker image: `nk/api/Dockerfile`
+- Local hardened compose profile: `deploy/nksf2/docker-compose.yml`
+- AWS ECS/Fargate + ALB Terraform: `infra/terraform/nksf2`
+- CI/CD workflow: `.github/workflows/nksf2-container-deploy.yml`
+- Static asset verification: `scripts/ops/check-nksf2-assets.ps1`
+
+NKSF2 runtime hardening includes:
+
+- non-root container user
+- read-only root filesystem
+- health checks
+- `helmet` headers
+- CORS restricted by env var
+- TLS 1.3-capable ALB policy in Terraform
+- security groups that only expose ALB ingress and ALB -> service traffic
+- Secrets Manager injection for the token secret
 
 ## Local run
 
@@ -70,6 +92,7 @@ Every vault route requires `Authorization: Bearer <authToken>`.
 node scripts\demo-e2e.mjs
 node scripts\decrypt-latest.mjs
 node scripts\ops\verify-vault-auth-flow.mjs
+pwsh scripts\ops\check-nksf2-assets.ps1
 ```
 
 The verification script proves:
@@ -78,3 +101,8 @@ The verification script proves:
 - cross-user read/delete requests fail
 - client-side decrypt still works after vault key rotation
 - old login password stops working after rotation
+
+For NKSF2 deployment details and evidence notes, see:
+
+- `docs/nk/NKSF2-deployment-hardening.md`
+- `infra/terraform/nksf2/README.md`

@@ -1,12 +1,23 @@
 import express from "express";
 import morgan from "morgan";
 import cors from "cors";
-import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "crypto";
+import helmet from "helmet";
+import { createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "crypto";
 import { z } from "zod";
 
-const TOKEN_SECRET = process.env.MOCK_TOKEN_SECRET?.trim() || "securitypass-local-dev-secret";
+const NODE_ENV = process.env.NODE_ENV?.trim() || "development";
+const IS_PRODUCTION = NODE_ENV === "production";
+const DEFAULT_TOKEN_SECRET = "securitypass-local-dev-secret";
+const TOKEN_SECRET = process.env.MOCK_TOKEN_SECRET?.trim() || DEFAULT_TOKEN_SECRET;
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const AUTH_TTL_MS = 15 * 60 * 1000;
+const DEFAULT_PORT = 8080;
+const HOST = process.env.HOST?.trim() || "0.0.0.0";
+const TRUST_PROXY_HOPS = Number(process.env.TRUST_PROXY_HOPS ?? 1);
+const CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 type TokenKind = "challenge" | "auth";
 
@@ -23,7 +34,8 @@ type VaultProfile = {
 
 type UserRecord = {
   username: string;
-  password: string;
+  passwordHash: string;
+  passwordSalt: string;
   mfaEnabled: boolean;
   mfaSecret?: string;
   vaultSalt: string;
@@ -48,9 +60,34 @@ declare global {
 }
 
 const app = express();
-app.use(cors({ origin: "*", methods: ["GET", "POST", "DELETE", "OPTIONS"] }));
-app.use(express.json({ limit: "1mb" }));
+app.disable("x-powered-by");
+app.set("trust proxy", TRUST_PROXY_HOPS);
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || !CORS_ALLOWED_ORIGINS.length || CORS_ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Origin not allowed by CORS."));
+    },
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["content-type", "authorization"],
+  })
+);
+app.use(express.json({ limit: "256kb" }));
 app.use(morgan("dev"));
+
+if (IS_PRODUCTION && TOKEN_SECRET === DEFAULT_TOKEN_SECRET) {
+  throw new Error("MOCK_TOKEN_SECRET must be set in production.");
+}
 
 const CipherItemInput = z.object({
   id: z.string().uuid().optional(),
@@ -78,7 +115,7 @@ const RotateKeyBody = z.object({
 
 const db = new Map<string, Item>();
 const users = new Map<string, UserRecord>();
-const mockMfaCode = process.env.MOCK_MFA_CODE?.trim() || "123456";
+const mockMfaCode = IS_PRODUCTION ? "" : process.env.MOCK_MFA_CODE?.trim() || "123456";
 const TOTP_STEP_SECONDS = 30;
 const TOTP_DIGITS = 6;
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -92,6 +129,16 @@ function createVaultProfile(): VaultProfile {
     salt: randomBytes(16).toString("base64"),
     keyVersion: 1,
   };
+}
+
+function hashPassword(password: string, salt = randomBytes(16).toString("base64")) {
+  const derived = scryptSync(password, salt, 64).toString("base64");
+  return { salt, hash: derived };
+}
+
+function verifyPassword(password: string, salt: string, expectedHash: string) {
+  const derived = scryptSync(password, salt, 64).toString("base64");
+  return timingSafeEqual(Buffer.from(derived, "utf8"), Buffer.from(expectedHash, "utf8"));
 }
 
 function encodeBase32(bytes: Buffer) {
@@ -300,6 +347,7 @@ function userItems(owner: string) {
 }
 
 app.get("/healthz", (_req, res) => res.status(200).send({ ok: true }));
+app.get("/readyz", (_req, res) => res.status(200).send({ ok: true, status: "ready" }));
 
 app.post("/register", (req, res) => {
   const parsed = CredentialsBody.safeParse(req.body);
@@ -314,9 +362,11 @@ app.post("/register", (req, res) => {
   }
 
   const profile = createVaultProfile();
+  const passwordRecord = hashPassword(parsed.data.password);
   users.set(key, {
     username,
-    password: parsed.data.password,
+    passwordHash: passwordRecord.hash,
+    passwordSalt: passwordRecord.salt,
     mfaEnabled: false,
     vaultSalt: profile.salt,
     vaultKeyVersion: profile.keyVersion,
@@ -333,7 +383,7 @@ app.post("/login", (req, res) => {
 
   const key = normalizeUsername(parsed.data.username);
   const user = users.get(key);
-  if (!user || user.password !== parsed.data.password) {
+  if (!user || !verifyPassword(parsed.data.password, user.passwordSalt, user.passwordHash)) {
     return res.status(401).json({ success: false, message: "Wrong username or password. Please try again." });
   }
 
@@ -367,7 +417,7 @@ app.post("/mfa/setup", requireToken("challenge"), (req, res) => {
     success: true,
     secret,
     otpAuthUrl,
-    mockCode: mockMfaCode,
+    mockCode: mockMfaCode || undefined,
   });
 });
 
@@ -382,7 +432,8 @@ app.post("/mfa/verify", requireToken("challenge"), (req, res) => {
     return;
   }
 
-  if (parsed.data.code !== mockMfaCode && !verifyTotpCode(user.mfaSecret, parsed.data.code)) {
+  const mockCodeAccepted = Boolean(mockMfaCode) && parsed.data.code === mockMfaCode;
+  if (!mockCodeAccepted && !verifyTotpCode(user.mfaSecret, parsed.data.code)) {
     return res.status(401).json({ success: false, message: "Invalid MFA code. Try again." });
   }
 
@@ -489,7 +540,7 @@ app.post("/vault/rotate-key", requireToken("auth"), (req, res) => {
     return;
   }
 
-  if (parsed.data.currentPassword !== user.password) {
+  if (!verifyPassword(parsed.data.currentPassword, user.passwordSalt, user.passwordHash)) {
     return res.status(401).json({ success: false, message: "Current master password is incorrect." });
   }
 
@@ -511,7 +562,9 @@ app.post("/vault/rotate-key", requireToken("auth"), (req, res) => {
     db.delete(item.id);
   }
 
-  user.password = parsed.data.newPassword;
+  const rotatedPassword = hashPassword(parsed.data.newPassword);
+  user.passwordHash = rotatedPassword.hash;
+  user.passwordSalt = rotatedPassword.salt;
   user.vaultSalt = parsed.data.newVaultSalt;
   user.vaultKeyVersion += 1;
 
@@ -537,5 +590,23 @@ app.post("/vault/rotate-key", requireToken("auth"), (req, res) => {
   });
 });
 
-const port = Number(process.env.PORT ?? 8080);
-app.listen(port, () => console.log(`Mock API listening on http://localhost:${port}`));
+const port = Number(process.env.PORT ?? DEFAULT_PORT);
+const server = app.listen(port, HOST, () =>
+  console.log(`Mock API listening on http://${HOST}:${port} (${NODE_ENV})`)
+);
+
+function shutdown(signal: string) {
+  console.log(`Received ${signal}. Shutting down HTTP server...`);
+  server.close(() => {
+    console.log("HTTP server stopped.");
+    process.exit(0);
+  });
+
+  setTimeout(() => {
+    console.error("Graceful shutdown timed out. Forcing exit.");
+    process.exit(1);
+  }, 10_000).unref();
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
