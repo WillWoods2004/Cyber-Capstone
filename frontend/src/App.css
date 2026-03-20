@@ -304,8 +304,7 @@
 
 /* CAP LOCK WARNING */
 .caps-warning {
-  margin-top: 6px;
-  margin-bottom: 6px;
+  margin: 0;
   font-size: 0.8rem;
   font-weight: 600;
   color: #facc15;
