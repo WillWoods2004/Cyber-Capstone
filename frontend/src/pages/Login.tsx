@@ -66,8 +66,14 @@ export default function Login({
     }
   };
 
-  const handlePasswordKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    const isCaps = event.getModifierState && event.getModifierState("CapsLock");
+  // ✅ Improved caps lock detection
+  const handleCapsCheck = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const isCaps = event.getModifierState?.("CapsLock") || false;
+    setCapsOn(isCaps);
+  };
+
+  const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
+    const isCaps = (event.nativeEvent as KeyboardEvent).getModifierState?.("CapsLock") || false;
     setCapsOn(isCaps);
   };
 
@@ -157,12 +163,17 @@ export default function Login({
                 }
               }}
               autoComplete="current-password"
-              onKeyDown={handlePasswordKeyDown}
+              onKeyDown={handleCapsCheck}
+              onKeyUp={handleCapsCheck}
+              onFocus={handleFocus}
               disabled={limitReached}
             />
+
+            {/* ✅ Updated message */}
             {capsOn && !limitReached && (
-              <p className="caps-warning">Caps Lock is ON. Your password may be entered incorrectly.</p>
+              <p className="caps-warning">Caps Lock is Turned On</p>
             )}
+
             {limitReached && (
               <p className="caps-warning">
                 You have reached the maximum of {MAX_ATTEMPTS} password attempts. Refresh the page to try again.
