@@ -66,14 +66,8 @@ export default function Login({
     }
   };
 
-  // ✅ Improved caps lock detection
   const handleCapsCheck = (event: React.KeyboardEvent<HTMLInputElement>) => {
     const isCaps = event.getModifierState?.("CapsLock") || false;
-    setCapsOn(isCaps);
-  };
-
-  const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
-    const isCaps = (event.nativeEvent as KeyboardEvent).getModifierState?.("CapsLock") || false;
     setCapsOn(isCaps);
   };
 
@@ -165,11 +159,9 @@ export default function Login({
               autoComplete="current-password"
               onKeyDown={handleCapsCheck}
               onKeyUp={handleCapsCheck}
-              onFocus={handleFocus}
               disabled={limitReached}
             />
 
-            {/* ✅ Updated message */}
             {capsOn && !limitReached && (
               <p className="caps-warning">Caps Lock is Turned On</p>
             )}
