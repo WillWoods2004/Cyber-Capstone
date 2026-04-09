@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
+    "test": "vitest --run",
+    "test:coverage": "vitest --coverage --run"
   },
   "dependencies": {
     "libsodium-wrappers-sumo": "^0.7.15",
