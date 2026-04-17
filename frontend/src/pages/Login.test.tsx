@@ -19,7 +19,7 @@ vi.mock("../auth/session", () => ({
 
 // Mock fetch globally
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch as typeof fetch;
 
 const defaultProps = {
   onPasswordOk: vi.fn(),
@@ -31,8 +31,6 @@ beforeEach(() => {
 });
 
 describe("Login Page", () => {
-
-  // --- RENDERING ---
   it("renders the login form correctly", () => {
     render(<Login {...defaultProps} />);
     expect(screen.getByText("Sign in")).toBeInTheDocument();
@@ -41,7 +39,6 @@ describe("Login Page", () => {
     expect(screen.getByText("Log in")).toBeInTheDocument();
   });
 
-  // --- FAILED LOGIN ---
   it("shows error message on wrong credentials", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -64,7 +61,6 @@ describe("Login Page", () => {
     });
   });
 
-  // --- SUCCESSFUL LOGIN ---
   it("calls onPasswordOk after successful login", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -91,7 +87,6 @@ describe("Login Page", () => {
     });
   });
 
-  // --- ATTEMPT LIMIT ---
   it("locks the form after 5 failed attempts", async () => {
     mockFetch.mockResolvedValue({
       ok: false,
@@ -105,11 +100,15 @@ describe("Login Page", () => {
       fireEvent.change(screen.getByPlaceholderText("your.email@example.com"), {
         target: { value: "test@test.com" },
       });
-      const passwordField = screen.queryByPlaceholderText("********") ||
-                            screen.queryByPlaceholderText("Password entry locked");
+
+      const passwordField =
+        screen.queryByPlaceholderText("********") ||
+        screen.queryByPlaceholderText("Password entry locked");
+
       if (passwordField) {
         fireEvent.change(passwordField, { target: { value: "wrong" } });
       }
+
       fireEvent.click(screen.getByText("Log in"));
       await waitFor(() => {});
     }
@@ -119,9 +118,8 @@ describe("Login Page", () => {
     });
   });
 
-  // --- LOADING STATE ---
   it("shows loading state while logging in", async () => {
-    mockFetch.mockResolvedValueOnce(new Promise(() => {})); // never resolves
+    mockFetch.mockResolvedValueOnce(new Promise(() => {}));
 
     render(<Login {...defaultProps} />);
 
@@ -138,11 +136,9 @@ describe("Login Page", () => {
     });
   });
 
-  // --- REGISTER LINK ---
   it("calls onShowRegister when Create one is clicked", () => {
     render(<Login {...defaultProps} />);
     fireEvent.click(screen.getByText("Create one"));
     expect(defaultProps.onShowRegister).toHaveBeenCalled();
   });
-
 });
