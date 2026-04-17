@@ -11,7 +11,7 @@ vi.mock("../auth/session", () => ({
 
 // Mock fetch globally
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch as typeof fetch;
 
 const defaultProps = {
   username: "testuser",
@@ -24,8 +24,6 @@ beforeEach(() => {
 });
 
 describe("MFAVerify Page", () => {
-
-  // --- RENDERING (VERIFY MODE) ---
   it("renders verify mode when user is already enrolled", () => {
     render(<MFAVerify {...defaultProps} enrolled={true} />);
     expect(screen.getByText("Enter MFA Code")).toBeInTheDocument();
@@ -33,7 +31,6 @@ describe("MFAVerify Page", () => {
     expect(screen.getByText("Verify")).toBeInTheDocument();
   });
 
-  // --- RENDERING (SETUP MODE) ---
   it("renders setup mode when user is not enrolled", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -49,7 +46,6 @@ describe("MFAVerify Page", () => {
     expect(screen.getByText("Set up MFA")).toBeInTheDocument();
   });
 
-  // --- EMPTY CODE ---
   it("shows error when submitting empty code", async () => {
     render(<MFAVerify {...defaultProps} />);
 
@@ -62,7 +58,6 @@ describe("MFAVerify Page", () => {
     });
   });
 
-  // --- INVALID CODE ---
   it("shows error on invalid MFA code", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -82,7 +77,6 @@ describe("MFAVerify Page", () => {
     });
   });
 
-  // --- VALID CODE ---
   it("calls onMfaOk after successful verification", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -105,9 +99,8 @@ describe("MFAVerify Page", () => {
     });
   });
 
-  // --- LOADING STATE ---
   it("shows verifying state while submitting", async () => {
-    mockFetch.mockResolvedValueOnce(new Promise(() => {})); // never resolves
+    mockFetch.mockResolvedValueOnce(new Promise(() => {}));
 
     render(<MFAVerify {...defaultProps} />);
 
@@ -121,7 +114,6 @@ describe("MFAVerify Page", () => {
     });
   });
 
-  // --- NETWORK ERROR ---
   it("shows error on network failure", async () => {
     mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
@@ -137,11 +129,9 @@ describe("MFAVerify Page", () => {
     });
   });
 
-  // --- MAX LENGTH ---
   it("only allows 6 digit input", () => {
     render(<MFAVerify {...defaultProps} />);
     const input = screen.getByPlaceholderText("123456");
     expect(input).toHaveAttribute("maxLength", "6");
   });
-
 });
