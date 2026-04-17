@@ -278,15 +278,16 @@ export default function VaultPanel({
         savedAt,
       };
 
+      if (currentUser.trim()) {
+        meta.userId = currentUser.trim();
+      }
+
       if (site.trim()) {
         meta.site = site.trim();
       }
 
       if (login.trim()) {
         meta.login = login.trim();
-        meta.username = login.trim();
-      } else if (currentUser.trim()) {
-        meta.username = currentUser.trim();
       }
 
       const blob = await encryptOnly(password, meta);
