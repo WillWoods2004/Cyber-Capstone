@@ -4,7 +4,7 @@ import Register from "./Register";
 
 // Mock fetch globally
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch as typeof fetch;
 
 const defaultProps = {
   onRegistered: vi.fn(),
@@ -17,7 +17,6 @@ beforeEach(() => {
 
 describe("Register Page", () => {
 
-  // --- RENDERING ---
   it("renders the registration form correctly", () => {
     render(<Register {...defaultProps} />);
     expect(screen.getByText("Create your account")).toBeInTheDocument();
@@ -27,10 +26,8 @@ describe("Register Page", () => {
     expect(screen.getByText("Create account")).toBeInTheDocument();
   });
 
-  // --- EMPTY FIELDS ---
   it("shows error when all fields are empty", async () => {
     render(<Register {...defaultProps} />);
-
     fireEvent.click(screen.getByText("Create account"));
 
     await waitFor(() => {
@@ -38,7 +35,6 @@ describe("Register Page", () => {
     });
   });
 
-  // --- PASSWORDS DO NOT MATCH ---
   it("shows error when passwords do not match", async () => {
     render(<Register {...defaultProps} />);
 
@@ -58,7 +54,6 @@ describe("Register Page", () => {
     });
   });
 
-  // --- PASSWORD TOO SHORT ---
   it("shows error when password is less than 8 characters", async () => {
     render(<Register {...defaultProps} />);
 
@@ -80,7 +75,6 @@ describe("Register Page", () => {
     });
   });
 
-  // --- SUCCESSFUL REGISTRATION ---
   it("calls onRegistered after successful registration", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -106,7 +100,6 @@ describe("Register Page", () => {
     });
   });
 
-  // --- SERVER ERROR ---
   it("shows error when server returns failure", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
@@ -132,9 +125,8 @@ describe("Register Page", () => {
     });
   });
 
-  // --- LOADING STATE ---
   it("shows loading state while registering", async () => {
-    mockFetch.mockResolvedValueOnce(new Promise(() => {})); // never resolves
+    mockFetch.mockResolvedValueOnce(new Promise(() => {}));
 
     render(<Register {...defaultProps} />);
 
@@ -154,7 +146,6 @@ describe("Register Page", () => {
     });
   });
 
-  // --- NETWORK ERROR ---
   it("shows error on network failure", async () => {
     mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
@@ -176,7 +167,6 @@ describe("Register Page", () => {
     });
   });
 
-  // --- CANCEL BUTTON ---
   it("calls onCancel when Sign in is clicked", () => {
     render(<Register {...defaultProps} />);
     fireEvent.click(screen.getByText("Sign in"));
