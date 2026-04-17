@@ -3,11 +3,13 @@ import VaultPanel from "../components/VaultPanel";
 type ClientVaultProps = {
   currentUser?: string;
   searchQuery?: string;
+  onVaultChange?: () => void;
 };
 
 export default function ClientVault({
   currentUser = "",
   searchQuery = "",
+  onVaultChange,
 }: ClientVaultProps) {
   return (
     <div className="client-vault-page">
@@ -25,7 +27,11 @@ export default function ClientVault({
 
       <div className="client-vault-grid">
         <div className="client-vault-card">
-          <VaultPanel currentUser={currentUser} searchQuery={searchQuery} />
+          <VaultPanel
+            currentUser={currentUser}
+            searchQuery={searchQuery}
+            onVaultChange={onVaultChange}
+          />
         </div>
       </div>
     </div>
