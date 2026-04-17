@@ -63,7 +63,6 @@ function belongsToCurrentUser(item: CipherBlob, currentUser: string): boolean {
 export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
   const { listItems, decryptItem, isReady } = useCrypto();
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
-  const [showPassword, setShowPassword] = useState<{ [key: number]: boolean }>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -103,7 +102,7 @@ export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
               plaintext,
             });
           } catch {
-            // Skip items that fail to decrypt in the summary panel.
+            // Skip items that fail to decrypt
           }
         }
 
@@ -118,10 +117,6 @@ export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
 
     void load();
   }, [decryptItem, isReady, listItems, currentUser]);
-
-  const togglePassword = (idx: number) => {
-    setShowPassword((prev) => ({ ...prev, [idx]: !prev[idx] }));
-  };
 
   return (
     <div className="panel">
@@ -146,15 +141,20 @@ export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
                 <div className="password-avatar">Lock</div>
                 <div>
                   <p className="password-site">{pwd.site}</p>
-                  <p className="password-username">{showPassword[idx] ? pwd.plaintext : pwd.username}</p>
+
+                  {/* FIX: Always mask password */}
+                  <p className="password-username">••••••••••</p>
+
                 </div>
               </div>
               <div className="password-item-right">
-                <span className={`password-badge badge-${pwd.strength}`}>{pwd.strength}</span>
+                <span className={`password-badge badge-${pwd.strength}`}>
+                  {pwd.strength}
+                </span>
                 <span className="password-time">{pwd.lastUsed}</span>
-                <button className="password-toggle" onClick={() => togglePassword(idx)}>
-                  {showPassword[idx] ? "Hide" : "Show"}
-                </button>
+
+                {/* FIX: Removed Show/Hide button */}
+
               </div>
             </div>
           ))}
