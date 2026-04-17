@@ -1,5 +1,3 @@
-// ONLY NEW CODE MARKED WITH *** COMMENTS
-
 import { useEffect, useRef, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 
@@ -53,8 +51,6 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
   const [error, setError] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
   const [timeoutMessage, setTimeoutMessage] = useState("");
-
-  // *** NEW STATE
   const [site, setSite] = useState("");
   const [usernameInput, setUsernameInput] = useState("");
 
@@ -94,10 +90,26 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
   useEffect(() => {
     return () => {
       clearGeneratedPasswordTimers();
-      if (clearClipboardTimeoutRef.current) window.clearTimeout(clearClipboardTimeoutRef.current);
-      if (clearMessageTimeoutRef.current) window.clearTimeout(clearMessageTimeoutRef.current);
+
+      if (clearClipboardTimeoutRef.current) {
+        window.clearTimeout(clearClipboardTimeoutRef.current);
+      }
+      if (clearMessageTimeoutRef.current) {
+        window.clearTimeout(clearMessageTimeoutRef.current);
+      }
     };
   }, []);
+
+  const handleChange =
+    (key: keyof GeneratorOptions) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (key === "length") {
+        const value = Number(e.target.value || 0);
+        setOptions((prev) => ({ ...prev, length: value }));
+      } else {
+        setOptions((prev) => ({ ...prev, [key]: e.target.checked }));
+      }
+    };
 
   const generate = () => {
     setError("");
@@ -105,6 +117,7 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
     setTimeoutMessage("");
 
     const pools: string[] = [];
+
     if (options.useLower) pools.push(LOWER);
     if (options.useUpper) pools.push(UPPER);
     if (options.useNumbers) pools.push(NUMBERS);
@@ -129,14 +142,48 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
       chars.push(allChars[getRandomInt(allChars.length)]);
     }
 
-    setPassword(shuffle(chars).join(""));
+    const final = shuffle(chars).join("");
+    setPassword(final);
     startGeneratedPasswordTimer();
+  };
+
+  const copyToClipboard = async () => {
+    if (!password) return;
+
+    try {
+      await navigator.clipboard.writeText(password);
+      setCopyMessage("Copied. Clipboard will clear in 30 seconds.");
+
+      if (clearClipboardTimeoutRef.current) {
+        window.clearTimeout(clearClipboardTimeoutRef.current);
+      }
+
+      if (clearMessageTimeoutRef.current) {
+        window.clearTimeout(clearMessageTimeoutRef.current);
+      }
+
+      clearClipboardTimeoutRef.current = window.setTimeout(async () => {
+        try {
+          const currentClipboard = await navigator.clipboard.readText();
+          if (currentClipboard === password) {
+            await navigator.clipboard.writeText("");
+          }
+        } catch {
+          // ignore clipboard permission failures
+        }
+      }, 30000);
+
+      clearMessageTimeoutRef.current = window.setTimeout(() => {
+        setCopyMessage("Clipboard auto-cleared for security.");
+      }, 30000);
+    } catch {
+      setCopyMessage("Clipboard access was not available.");
+    }
   };
 
   const saveToVault = async () => {
     if (!password) return;
 
-    // *** VALIDATION
     if (!site.trim()) {
       alert("Enter the site for this password.");
       return;
@@ -149,15 +196,14 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
 
     try {
       const savedAt = new Date().toISOString();
-
       await encryptAndStore(password, {
         userId: currentUser,
-        site: site.trim(),            // *** NEW
-        login: usernameInput.trim(),  // *** NEW
-        username: usernameInput.trim(), // *** NEW
         label: "generated",
+        site: site.trim(),
+        login: usernameInput.trim(),
         createdAt: savedAt,
         savedAt,
+        username: usernameInput.trim(),
         length: options.length,
         lower: options.useLower,
         upper: options.useUpper,
@@ -167,8 +213,8 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
 
       clearGeneratedPasswordTimers();
       setTimeoutMessage("");
-      setSite("");              // *** CLEAR
-      setUsernameInput("");     // *** CLEAR
+      setSite("");
+      setUsernameInput("");
       alert("Saved to vault.");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -179,29 +225,114 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
   return (
     <div className="pwgen">
       <h2 className="pwgen-title">Password generator</h2>
+      <p className="pwgen-subtitle">
+        Choose the options and we'll generate a password.
+      </p>
 
-      {/* *** NEW INPUTS */}
-      <input
-        placeholder="Website (e.g., gmail.com)"
-        value={site}
-        onChange={(e) => setSite(e.target.value)}
-      />
+      <div className="pwgen-grid">
+        <label className="pwgen-field">
+          <span>Length</span>
+          <input
+            type="number"
+            min={4}
+            max={64}
+            value={options.length}
+            onChange={handleChange("length")}
+          />
+        </label>
 
-      <input
-        placeholder="Username / Email"
-        value={usernameInput}
-        onChange={(e) => setUsernameInput(e.target.value)}
-      />
+        <label className="pwgen-checkbox">
+          <input
+            type="checkbox"
+            checked={options.useLower}
+            onChange={handleChange("useLower")}
+          />
+          <span>Lowercase (a–z)</span>
+        </label>
+
+        <label className="pwgen-checkbox">
+          <input
+            type="checkbox"
+            checked={options.useUpper}
+            onChange={handleChange("useUpper")}
+          />
+          <span>Uppercase (A–Z)</span>
+        </label>
+
+        <label className="pwgen-checkbox">
+          <input
+            type="checkbox"
+            checked={options.useNumbers}
+            onChange={handleChange("useNumbers")}
+          />
+          <span>Numbers (0–9)</span>
+        </label>
+
+        <label className="pwgen-checkbox">
+          <input
+            type="checkbox"
+            checked={options.useSymbols}
+            onChange={handleChange("useSymbols")}
+          />
+          <span>Symbols (!@#$...)</span>
+        </label>
+      </div>
+
+      <div className="pwgen-grid" style={{ marginTop: "1rem" }}>
+        <label className="pwgen-field">
+          <span>Site</span>
+          <input
+            type="text"
+            placeholder="Website (e.g., gmail.com)"
+            value={site}
+            onChange={(e) => setSite(e.target.value)}
+          />
+        </label>
+
+        <label className="pwgen-field">
+          <span>Username / Email</span>
+          <input
+            type="text"
+            placeholder="Login / email"
+            value={usernameInput}
+            onChange={(e) => setUsernameInput(e.target.value)}
+          />
+        </label>
+      </div>
+
+      {error && <div className="pwgen-error">{error}</div>}
+      {copyMessage && <div className="pwgen-subtitle">{copyMessage}</div>}
+      {timeoutMessage && <div className="pwgen-error">{timeoutMessage}</div>}
 
       <div className="pwgen-actions">
-        <button onClick={generate}>Generate password</button>
-        <button onClick={saveToVault} disabled={!password}>
+        <button className="primary-btn" onClick={generate}>
+          Generate password
+        </button>
+
+        <button
+          type="button"
+          className="pwgen-copy"
+          onClick={copyToClipboard}
+          disabled={!password}
+        >
+          Copy
+        </button>
+
+        <button
+          type="button"
+          className="pwgen-copy"
+          onClick={saveToVault}
+          disabled={!password}
+        >
           Save to vault
         </button>
       </div>
 
       <div className="pwgen-output">
-        {password || "Nothing yet..."}
+        <span className="pwgen-output-label">Generated password</span>
+        <div className="pwgen-output-box">
+          {password || <span className="pwgen-placeholder">Nothing yet…</span>}
+        </div>
       </div>
     </div>
   );
