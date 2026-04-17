@@ -8,10 +8,6 @@ type GeneratorOptions = {
   useSymbols: boolean;
 };
 
-type PasswordGeneratorProps = {
-  currentUser: string;
-};
-
 const LOWER = "abcdefghijklmnopqrstuvwxyz";
 const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const NUMBERS = "0123456789";
@@ -37,7 +33,7 @@ function shuffle(chars: string[]): string[] {
   return chars;
 }
 
-export default function PasswordGenerator({ currentUser }: PasswordGeneratorProps) {
+export default function PasswordGenerator() {
   const [options, setOptions] = useState<GeneratorOptions>({
     length: 16,
     useLower: true,
