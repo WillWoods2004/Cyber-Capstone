@@ -11,6 +11,7 @@ type Stats = {
 
 type StatsCardsProps = {
   currentUser: string;
+  refreshTrigger?: number;
 };
 
 function belongsToCurrentUser(item: CipherBlob, currentUser: string): boolean {
@@ -56,7 +57,7 @@ function calcSecurityScore(total: number, weak: number): number {
   return Math.round(strongRatio * 100);
 }
 
-export default function StatsCards({ currentUser }: StatsCardsProps) {
+export default function StatsCards({ currentUser, refreshTrigger }: StatsCardsProps) {
   const { listItems, decryptItem, isReady } = useCrypto();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,7 +100,7 @@ export default function StatsCards({ currentUser }: StatsCardsProps) {
     }
 
     computeStats();
-  }, [isReady, listItems, decryptItem, currentUser]);
+  }, [isReady, listItems, decryptItem, currentUser, refreshTrigger]);
 
   const cards = [
     {
