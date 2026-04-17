@@ -7,6 +7,7 @@ import { getAuthToken } from "../auth/session";
 type VaultPanelProps = {
   currentUser?: string;
   searchQuery?: string;
+  onVaultChange?: () => void;
 };
 
 type Row = CipherBlob & { _idx: number };
@@ -143,6 +144,7 @@ async function copyText(value: string): Promise<boolean> {
 export default function VaultPanel({
   currentUser = "",
   searchQuery = "",
+  onVaultChange,
 }: VaultPanelProps) {
   const {
     isReady,
@@ -328,6 +330,7 @@ export default function VaultPanel({
       setDecrypted(null);
       setSelectedMeta(null);
       await refresh();
+      if (onVaultChange) onVaultChange();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setErr(message);
@@ -432,6 +435,7 @@ export default function VaultPanel({
 
       addLog(`Deleted item ${id.slice(0, 8)}`);
       await refresh();
+      if (onVaultChange) onVaultChange();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setErr(message);
