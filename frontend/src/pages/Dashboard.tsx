@@ -34,6 +34,7 @@ export default function Dashboard({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
   const [vaultSearchQuery, setVaultSearchQuery] = useState("");
+  const [refreshStats, setRefreshStats] = useState(0);
 
   const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
 
@@ -71,7 +72,7 @@ export default function Dashboard({
                 </p>
               </div>
 
-              <StatsCards currentUser={username} />
+              <StatsCards currentUser={username} refreshTrigger={refreshStats} />
 
               <div className="dashboard-grid">
                 <div className="grid-col-2">
@@ -106,7 +107,11 @@ export default function Dashboard({
 
           {activeView === "clientVault" && (
             <div className="client-vault-wrapper">
-              <ClientVault currentUser={username} searchQuery={vaultSearchQuery} />
+              <ClientVault
+                currentUser={username}
+                searchQuery={vaultSearchQuery}
+                onVaultChange={() => setRefreshStats((prev) => prev + 1)}
+              />
             </div>
           )}
 
