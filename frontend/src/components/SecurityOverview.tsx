@@ -134,13 +134,17 @@ export default function SecurityOverview({ expanded = false }: SecurityOverviewP
           found.push({ type: "Old Password (>90 days)", count: oldCount, severity: "low" });
         }
 
-        const total = vaultItems.length || 1;
-        const deduction = (((weakCount * 3) + (duplicateCount * 2) + oldCount) / total) * 100;
-
         if (mounted) {
+          const averageScore =
+            scored.length > 0
+              ? Math.round(
+                  scored.reduce((sum, item) => sum + item.score, 0) / scored.length
+                )
+              : 100;
+
           setIssues(found);
           setItems(scored);
-          setScore(Math.max(0, Math.round(100 - deduction)));
+          setScore(averageScore);
         }
       } catch (err) {
         console.error("SecurityOverview: failed to analyze", err);
