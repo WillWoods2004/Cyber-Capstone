@@ -35,7 +35,7 @@ export default function QuickActions({
 
           <button className="quick-action-btn" onClick={onRunAudit}>
             <span>Audit</span>
-            <span>Run Security Audit</span>
+            <span>View Security Score</span>
           </button>
         </div>
       </div>
