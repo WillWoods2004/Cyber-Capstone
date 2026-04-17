@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { useCrypto } from "../crypto/CryptoProvider";
 
 type GeneratorOptions = {
   length: number;
@@ -51,10 +50,6 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
   const [error, setError] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
   const [timeoutMessage, setTimeoutMessage] = useState("");
-  const [site, setSite] = useState("");
-  const [usernameInput, setUsernameInput] = useState("");
-
-  const { encryptAndStore } = useCrypto();
 
   const clearClipboardTimeoutRef = useRef<number | null>(null);
   const clearMessageTimeoutRef = useRef<number | null>(null);
@@ -77,13 +72,13 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
     setTimeoutMessage("");
 
     warningTimeoutRef.current = window.setTimeout(() => {
-      setTimeoutMessage("Warning: this generated password will be removed in 30 seconds unless you save it.");
+      setTimeoutMessage("Warning: this generated password will be removed in 30 seconds unless you copy it.");
     }, GENERATED_PASSWORD_TIMEOUT_MS - WARNING_BEFORE_CLEAR_MS);
 
     passwordClearTimeoutRef.current = window.setTimeout(() => {
       setPassword("");
       setCopyMessage("");
-      setTimeoutMessage("Generated password was cleared for security because it was not saved in time.");
+      setTimeoutMessage("Generated password was cleared for security because it was not copied in time.");
     }, GENERATED_PASSWORD_TIMEOUT_MS);
   };
 
@@ -181,47 +176,6 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
     }
   };
 
-  const saveToVault = async () => {
-    if (!password) return;
-
-    if (!site.trim()) {
-      alert("Enter the site for this password.");
-      return;
-    }
-
-    if (!usernameInput.trim()) {
-      alert("Enter the username for this password.");
-      return;
-    }
-
-    try {
-      const savedAt = new Date().toISOString();
-      await encryptAndStore(password, {
-        userId: currentUser,
-        label: "generated",
-        site: site.trim(),
-        login: usernameInput.trim(),
-        createdAt: savedAt,
-        savedAt,
-        username: usernameInput.trim(),
-        length: options.length,
-        lower: options.useLower,
-        upper: options.useUpper,
-        numbers: options.useNumbers,
-        symbols: options.useSymbols,
-      });
-
-      clearGeneratedPasswordTimers();
-      setTimeoutMessage("");
-      setSite("");
-      setUsernameInput("");
-      alert("Saved to vault.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      alert(`Save failed: ${message}`);
-    }
-  };
-
   return (
     <div className="pwgen">
       <h2 className="pwgen-title">Password generator</h2>
@@ -278,28 +232,6 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
         </label>
       </div>
 
-      <div className="pwgen-grid" style={{ marginTop: "1rem" }}>
-        <label className="pwgen-field">
-          <span>Site</span>
-          <input
-            type="text"
-            placeholder="Website (e.g., gmail.com)"
-            value={site}
-            onChange={(e) => setSite(e.target.value)}
-          />
-        </label>
-
-        <label className="pwgen-field">
-          <span>Username / Email</span>
-          <input
-            type="text"
-            placeholder="Login / email"
-            value={usernameInput}
-            onChange={(e) => setUsernameInput(e.target.value)}
-          />
-        </label>
-      </div>
-
       {error && <div className="pwgen-error">{error}</div>}
       {copyMessage && <div className="pwgen-subtitle">{copyMessage}</div>}
       {timeoutMessage && <div className="pwgen-error">{timeoutMessage}</div>}
@@ -316,15 +248,6 @@ export default function PasswordGenerator({ currentUser }: PasswordGeneratorProp
           disabled={!password}
         >
           Copy
-        </button>
-
-        <button
-          type="button"
-          className="pwgen-copy"
-          onClick={saveToVault}
-          disabled={!password}
-        >
-          Save to vault
         </button>
       </div>
 
