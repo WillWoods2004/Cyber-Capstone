@@ -1,168 +1,369 @@
-import { useState } from "react";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
-import StatsCards from "../components/StatsCards";
-import RecentPasswords from "../components/RecentPasswords";
-import ActivityFeed from "../components/ActivityFeed";
-import SecurityOverview from "../components/SecurityOverview";
-import QuickActions from "../components/QuickActions";
-import PasswordGenerator from "../components/PasswordGenerator";
-import ClientVault from "./ClientVault";
+import { useEffect, useMemo, useState } from "react";
+import { useCrypto } from "../crypto/CryptoProvider";
+import type { CipherBlob } from "../crypto/crypto";
 
-type DashboardProps = {
-  username: string;
-  mfaEnabled: boolean;
-  onLogout?: () => void;
-  theme: "light" | "dark";
-  onToggleTheme: () => void;
+type SecurityOverviewProps = {
+  expanded?: boolean;
+  currentUser?: string;
+  refreshTrigger?: number;
+  onFixNow?: () => void;
 };
 
-type ActiveView =
-  | "dashboard"
-  | "generator"
-  | "clientVault"
-  | "security"
-  | "settings";
+type SecurityIssue = {
+  type: string;
+  count: number;
+  severity: "high" | "medium" | "low";
+};
 
-export default function Dashboard({
-  username,
-  mfaEnabled,
-  onLogout,
-  theme,
-  onToggleTheme,
-}: DashboardProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeView, setActiveView] = useState<ActiveView>("dashboard");
-  const [vaultSearchQuery, setVaultSearchQuery] = useState("");
-  const [refreshStats, setRefreshStats] = useState(0);
+type ScoredPassword = {
+  id: string;
+  label: string;
+  password: string;
+  score: number;
+  rating: "Strong" | "Moderate" | "Weak";
+};
 
-  const themeLabel = theme === "light" ? "Dark mode" : "Light mode";
+function belongsToCurrentUser(item: CipherBlob, currentUser: string): boolean {
+  const metaUserId = (item.meta?.userId as string | undefined) ?? "";
+  const metaUsername = (item.meta?.username as string | undefined) ?? "";
+  const metaLogin = (item.meta?.login as string | undefined) ?? "";
 
-  const handleSearch = (query: string) => {
-    setVaultSearchQuery(query);
-    if (query.trim()) {
-      setActiveView("clientVault");
-    }
-  };
+  if (!currentUser.trim()) {
+    return true;
+  }
+
+  if (!metaUserId && !metaUsername && !metaLogin) {
+    return true;
+  }
 
   return (
-    <div className="dashboard-container">
-      <Sidebar
-        isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
-        activeView={activeView}
-        onViewChange={(view) => setActiveView(view as ActiveView)}
-        username={username}
-      />
+    metaUserId === currentUser ||
+    metaUsername === currentUser ||
+    metaLogin === currentUser
+  );
+}
 
-      <div className="dashboard-main">
-        <TopBar
-          onAddPassword={() => setActiveView("clientVault")}
-          onGeneratePassword={() => setActiveView("generator")}
-          onSearch={handleSearch}
-        />
+function isWeak(password: string): boolean {
+  if (password.length < 8) return true;
 
-        <div className="dashboard-content">
-          {activeView === "dashboard" && (
-            <>
-              <div className="welcome-section">
-                <h2 className="dashboard-title">Welcome back, {username}!</h2>
-                <p className="dashboard-subtitle">
-                  You have successfully logged in {mfaEnabled ? "with MFA." : "."}
-                </p>
-              </div>
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
 
-              <StatsCards currentUser={username} refreshTrigger={refreshStats} />
+  return [hasUpper, hasLower, hasNumber, hasSpecial].filter(Boolean).length < 3;
+}
 
-              <div className="dashboard-grid">
-                <div className="grid-col-2">
-                  <RecentPasswords currentUser={username} />
-                </div>
-                <div className="grid-col-1">
-                  <ActivityFeed />
-                </div>
-                <div className="grid-col-2">
-                  <SecurityOverview
-                    currentUser={username}
-                    refreshTrigger={refreshStats}
-                    onFixNow={() => setActiveView("clientVault")}
-                  />
-                </div>
-                <div className="grid-col-1">
-                  <QuickActions
-                    onGeneratePassword={() => setActiveView("generator")}
-                    onAddPassword={() => setActiveView("clientVault")}
-                    onExportPasswords={() => setActiveView("clientVault")}
-                    onRunAudit={() => setActiveView("security")}
-                  />
-                </div>
-              </div>
-            </>
-          )}
+function isOld(meta?: Record<string, unknown>): boolean {
+  const savedAt =
+    (meta?.savedAt as string | undefined) ||
+    (meta?.createdAt as string | undefined);
+  if (!savedAt) return false;
 
-          {activeView === "generator" && (
-            <div className="generator-page">
-              <h2 className="dashboard-title">Password Generator</h2>
-              <div className="generator-wrapper">
-                <PasswordGenerator />
-              </div>
+  const saved = new Date(savedAt).getTime();
+  const ninetyDays = 90 * 24 * 60 * 60 * 1000;
+  return Date.now() - saved > ninetyDays;
+}
+
+function scorePassword(password: string) {
+  let score = 0;
+
+  if (password.length >= 8) score += 20;
+  if (password.length >= 12) score += 20;
+  if (/[a-z]/.test(password)) score += 15;
+  if (/[A-Z]/.test(password)) score += 15;
+  if (/[0-9]/.test(password)) score += 15;
+  if (/[^A-Za-z0-9]/.test(password)) score += 15;
+
+  if (score >= 85) return { score, rating: "Strong" as const };
+  if (score >= 60) return { score, rating: "Moderate" as const };
+  return { score, rating: "Weak" as const };
+}
+
+function calcSecurityScore(total: number, weak: number): number {
+  if (total === 0) return 100;
+  const strongRatio = (total - weak) / total;
+  return Math.round(strongRatio * 100);
+}
+
+function labelForItem(item: CipherBlob): string {
+  const meta = item.meta as Record<string, unknown> | undefined;
+  return (
+    (typeof meta?.site === "string" && meta.site) ||
+    (typeof meta?.label === "string" && meta.label) ||
+    (typeof meta?.username === "string" && meta.username) ||
+    (typeof meta?.login === "string" && meta.login) ||
+    "Saved Entry"
+  );
+}
+
+export default function SecurityOverview({
+  expanded = false,
+  currentUser = "",
+  refreshTrigger = 0,
+  onFixNow,
+}: SecurityOverviewProps) {
+  const { listItems, decryptItem, isReady } = useCrypto();
+  const [issues, setIssues] = useState<SecurityIssue[]>([]);
+  const [items, setItems] = useState<ScoredPassword[]>([]);
+  const [score, setScore] = useState<number>(100);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function analyze() {
+      if (!isReady) {
+        if (mounted) {
+          setIssues([]);
+          setItems([]);
+          setScore(100);
+          setError("");
+          setLoading(false);
+        }
+        return;
+      }
+
+      setLoading(true);
+      setError("");
+
+      try {
+        const vaultItems: CipherBlob[] = await listItems();
+        const userItems = vaultItems.filter((item) =>
+          belongsToCurrentUser(item, currentUser)
+        );
+
+        const plaintexts: string[] = [];
+        const scored: ScoredPassword[] = [];
+
+        let weakCount = 0;
+        let oldCount = 0;
+
+        for (const item of userItems) {
+          try {
+            const plaintext = await decryptItem(item);
+            plaintexts.push(plaintext);
+
+            if (isWeak(plaintext)) weakCount++;
+            if (isOld(item.meta)) oldCount++;
+
+            const result = scorePassword(plaintext);
+            scored.push({
+              id: item.id ?? `${labelForItem(item)}-${scored.length}`,
+              label: labelForItem(item),
+              password: plaintext,
+              score: result.score,
+              rating: result.rating,
+            });
+          } catch {
+            // Skip items that cannot be decrypted with the current session key.
+          }
+        }
+
+        const duplicateCount = plaintexts.length - new Set(plaintexts).size;
+        const found: SecurityIssue[] = [];
+
+        if (weakCount > 0) {
+          found.push({ type: "Weak Password", count: weakCount, severity: "high" });
+        }
+        if (duplicateCount > 0) {
+          found.push({
+            type: "Duplicate Password",
+            count: duplicateCount,
+            severity: "medium",
+          });
+        }
+        if (oldCount > 0) {
+          found.push({
+            type: "Old Password (>90 days)",
+            count: oldCount,
+            severity: "low",
+          });
+        }
+
+        if (mounted) {
+          setIssues(found);
+          setItems(scored);
+          setScore(calcSecurityScore(scored.length, weakCount));
+        }
+      } catch (err) {
+        console.error("SecurityOverview: failed to analyze", err);
+        if (mounted) {
+          setIssues([]);
+          setItems([]);
+          setScore(100);
+          setError(
+            err instanceof Error ? err.message : "Failed to load security analysis."
+          );
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void analyze();
+
+    return () => {
+      mounted = false;
+    };
+  }, [decryptItem, isReady, listItems, currentUser, refreshTrigger]);
+
+  const scoreColor = score >= 80 ? "#22c55e" : score >= 60 ? "#f59e0b" : "#ef4444";
+  const visibleIssues = expanded ? issues : issues.slice(0, 3);
+  const overallRating = useMemo(() => {
+    if (score >= 85) return "Strong";
+    if (score >= 60) return "Moderate";
+    return "Weak";
+  }, [score]);
+
+  if (!expanded) {
+    return (
+      <div className="panel">
+        <div className="panel-header">
+          <h3 className="panel-title">Security Overview</h3>
+        </div>
+        <div className="panel-content">
+          <div className="security-score-section">
+            <div className="security-score-header">
+              <span className="security-score-label">Overall Security Score</span>
+              <span className="security-score-value" style={{ color: scoreColor }}>
+                {loading ? "-" : `${score}%`}
+              </span>
             </div>
-          )}
-
-          {activeView === "clientVault" && (
-            <div className="client-vault-wrapper">
-              <ClientVault
-                currentUser={username}
-                searchQuery={vaultSearchQuery}
-                onVaultChange={() => setRefreshStats((prev) => prev + 1)}
+            <div className="security-progress-bar">
+              <div
+                className="security-progress-fill"
+                style={{ width: loading ? "0%" : `${score}%`, background: scoreColor }}
               />
             </div>
-          )}
+          </div>
 
-          {activeView === "security" && (
-            <div className="security-page">
-              <SecurityOverview
-                expanded={true}
-                currentUser={username}
-                refreshTrigger={refreshStats}
-              />
-            </div>
-          )}
-
-          {activeView === "settings" && (
-            <div className="settings-page">
-              <h2 className="dashboard-title">Settings</h2>
-              <p className="dashboard-subtitle">
-                Configure your account preferences
+          <div className="security-issues">
+            {loading && (
+              <p style={{ color: "#6b7280", fontSize: "0.85rem", padding: "0.5rem 0" }}>
+                Analyzing vault...
               </p>
-
-              <div className="settings-layout">
-                <div className="settings-card">
-                  <h3 className="settings-section-title">Appearance</h3>
-                  <p className="settings-section-subtitle">
-                    Switch between light and dark themes.
-                  </p>
-                  <button className="theme-toggle" onClick={onToggleTheme}>
-                    {themeLabel}
+            )}
+            {!loading && error && (
+              <p style={{ color: "#ef4444", fontSize: "0.85rem", padding: "0.5rem 0" }}>
+                {error}
+              </p>
+            )}
+            {!loading && !error && visibleIssues.length === 0 && (
+              <p style={{ color: "#22c55e", fontSize: "0.85rem", padding: "0.5rem 0" }}>
+                No security issues found.
+              </p>
+            )}
+            {!loading &&
+              !error &&
+              visibleIssues.map((issue) => (
+                <div key={issue.type} className="security-issue">
+                  <div className="security-issue-left">
+                    <span className={`security-severity severity-${issue.severity}`}>
+                      Alert
+                    </span>
+                    <div>
+                      <p className="security-issue-type">{issue.type}</p>
+                      <p className="security-issue-count">
+                        {issue.count} passwords affected
+                      </p>
+                    </div>
+                  </div>
+                  <button className="security-fix-btn" onClick={onFixNow}>
+                    Fix Now
                   </button>
                 </div>
-
-                <div className="settings-card">
-                  <h3 className="settings-section-title">Account</h3>
-                  <p className="settings-section-subtitle">
-                    Sign out of your SecureVault session.
-                  </p>
-                  {onLogout && (
-                    <button className="logout-btn" onClick={onLogout}>
-                      Logout
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+              ))}
+          </div>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="security-page">
+      <h2 className="dashboard-title">Security Center</h2>
+      <p className="dashboard-subtitle">
+        Review your decrypted vault entries, overall score, and password hygiene issues.
+      </p>
+
+      <div className="settings-card" style={{ marginBottom: "20px" }}>
+        <h3 className="settings-section-title">Overall Security Score</h3>
+        <p className="settings-section-subtitle">
+          {loading ? "Loading security analysis..." : `${score}/100 - ${overallRating}`}
+        </p>
+      </div>
+
+      {error && (
+        <div className="settings-card" style={{ marginBottom: "20px" }}>
+          <p className="settings-section-subtitle">{error}</p>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <div className="settings-layout" style={{ marginBottom: "20px" }}>
+          {visibleIssues.length === 0 ? (
+            <div className="settings-card">
+              <h3 className="settings-section-title">No Issues Detected</h3>
+              <p className="settings-section-subtitle">
+                Your current decrypted vault entries do not show weak, duplicate, or old
+                passwords.
+              </p>
+            </div>
+          ) : (
+            visibleIssues.map((issue) => (
+              <div className="settings-card" key={issue.type}>
+                <h3 className="settings-section-title">{issue.type}</h3>
+                <p className="settings-section-subtitle">
+                  Severity: <strong>{issue.severity}</strong>
+                </p>
+                <p className="settings-section-subtitle">
+                  Count: <strong>{issue.count}</strong>
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {loading && (
+        <div className="settings-card">
+          <p className="settings-section-subtitle">Loading decryptable vault entries...</p>
+        </div>
+      )}
+
+      {!loading && !error && items.length === 0 && (
+        <div className="settings-card">
+          <p className="settings-section-subtitle">
+            No decryptable passwords were found for this session.
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && items.length > 0 && (
+        <>
+          <h3 className="settings-section-title" style={{ marginBottom: "16px" }}>
+            Passwords
+          </h3>
+
+          <div className="settings-layout">
+            {items.map((item) => (
+              <div className="settings-card" key={item.id}>
+                <h3 className="settings-section-title">Website: {item.label}</h3>
+                <p className="settings-section-subtitle">
+                  Rating: <strong>{item.rating}</strong>
+                </p>
+                <p className="settings-section-subtitle">
+                  Score: <strong>{item.score}/100</strong>
+                </p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
