@@ -4,6 +4,9 @@ import type { CipherBlob } from "../crypto/crypto";
 
 type SecurityOverviewProps = {
   expanded?: boolean;
+  currentUser?: string;
+  refreshTrigger?: number;
+  onFixNow?: () => void;
 };
 
 type SecurityIssue = {
@@ -20,6 +23,26 @@ type ScoredPassword = {
   rating: "Strong" | "Moderate" | "Weak";
 };
 
+function belongsToCurrentUser(item: CipherBlob, currentUser: string): boolean {
+  const metaUserId = (item.meta?.userId as string | undefined) ?? "";
+  const metaUsername = (item.meta?.username as string | undefined) ?? "";
+  const metaLogin = (item.meta?.login as string | undefined) ?? "";
+
+  if (!currentUser.trim()) {
+    return true;
+  }
+
+  if (!metaUserId && !metaUsername && !metaLogin) {
+    return true;
+  }
+
+  return (
+    metaUserId === currentUser ||
+    metaUsername === currentUser ||
+    metaLogin === currentUser
+  );
+}
+
 function isWeak(password: string): boolean {
   if (password.length < 8) return true;
 
@@ -32,7 +55,9 @@ function isWeak(password: string): boolean {
 }
 
 function isOld(meta?: Record<string, unknown>): boolean {
-  const savedAt = (meta?.savedAt as string | undefined) || (meta?.createdAt as string | undefined);
+  const savedAt =
+    (meta?.savedAt as string | undefined) ||
+    (meta?.createdAt as string | undefined);
   if (!savedAt) return false;
 
   const saved = new Date(savedAt).getTime();
@@ -55,6 +80,12 @@ function scorePassword(password: string) {
   return { score, rating: "Weak" as const };
 }
 
+function calcSecurityScore(total: number, weak: number): number {
+  if (total === 0) return 100;
+  const strongRatio = (total - weak) / total;
+  return Math.round(strongRatio * 100);
+}
+
 function labelForItem(item: CipherBlob): string {
   const meta = item.meta as Record<string, unknown> | undefined;
   return (
@@ -66,7 +97,12 @@ function labelForItem(item: CipherBlob): string {
   );
 }
 
-export default function SecurityOverview({ expanded = false }: SecurityOverviewProps) {
+export default function SecurityOverview({
+  expanded = false,
+  currentUser = "",
+  refreshTrigger = 0,
+  onFixNow,
+}: SecurityOverviewProps) {
   const { listItems, decryptItem, isReady } = useCrypto();
   const [issues, setIssues] = useState<SecurityIssue[]>([]);
   const [items, setItems] = useState<ScoredPassword[]>([]);
@@ -94,13 +130,17 @@ export default function SecurityOverview({ expanded = false }: SecurityOverviewP
 
       try {
         const vaultItems: CipherBlob[] = await listItems();
+        const userItems = vaultItems.filter((item) =>
+          belongsToCurrentUser(item, currentUser)
+        );
+
         const plaintexts: string[] = [];
         const scored: ScoredPassword[] = [];
 
         let weakCount = 0;
         let oldCount = 0;
 
-        for (const item of vaultItems) {
+        for (const item of userItems) {
           try {
             const plaintext = await decryptItem(item);
             plaintexts.push(plaintext);
@@ -128,23 +168,24 @@ export default function SecurityOverview({ expanded = false }: SecurityOverviewP
           found.push({ type: "Weak Password", count: weakCount, severity: "high" });
         }
         if (duplicateCount > 0) {
-          found.push({ type: "Duplicate Password", count: duplicateCount, severity: "medium" });
+          found.push({
+            type: "Duplicate Password",
+            count: duplicateCount,
+            severity: "medium",
+          });
         }
         if (oldCount > 0) {
-          found.push({ type: "Old Password (>90 days)", count: oldCount, severity: "low" });
+          found.push({
+            type: "Old Password (>90 days)",
+            count: oldCount,
+            severity: "low",
+          });
         }
 
         if (mounted) {
-          const averageScore =
-            scored.length > 0
-              ? Math.round(
-                  scored.reduce((sum, item) => sum + item.score, 0) / scored.length
-                )
-              : 100;
-
           setIssues(found);
           setItems(scored);
-          setScore(averageScore);
+          setScore(calcSecurityScore(scored.length, weakCount));
         }
       } catch (err) {
         console.error("SecurityOverview: failed to analyze", err);
@@ -152,7 +193,9 @@ export default function SecurityOverview({ expanded = false }: SecurityOverviewP
           setIssues([]);
           setItems([]);
           setScore(100);
-          setError(err instanceof Error ? err.message : "Failed to load security analysis.");
+          setError(
+            err instanceof Error ? err.message : "Failed to load security analysis."
+          );
         }
       } finally {
         if (mounted) {
@@ -166,7 +209,7 @@ export default function SecurityOverview({ expanded = false }: SecurityOverviewP
     return () => {
       mounted = false;
     };
-  }, [decryptItem, isReady, listItems]);
+  }, [decryptItem, isReady, listItems, currentUser, refreshTrigger]);
 
   const scoreColor = score >= 80 ? "#22c55e" : score >= 60 ? "#f59e0b" : "#ef4444";
   const visibleIssues = expanded ? issues : issues.slice(0, 3);
@@ -205,7 +248,9 @@ export default function SecurityOverview({ expanded = false }: SecurityOverviewP
               </p>
             )}
             {!loading && error && (
-              <p style={{ color: "#ef4444", fontSize: "0.85rem", padding: "0.5rem 0" }}>{error}</p>
+              <p style={{ color: "#ef4444", fontSize: "0.85rem", padding: "0.5rem 0" }}>
+                {error}
+              </p>
             )}
             {!loading && !error && visibleIssues.length === 0 && (
               <p style={{ color: "#22c55e", fontSize: "0.85rem", padding: "0.5rem 0" }}>
@@ -217,13 +262,19 @@ export default function SecurityOverview({ expanded = false }: SecurityOverviewP
               visibleIssues.map((issue) => (
                 <div key={issue.type} className="security-issue">
                   <div className="security-issue-left">
-                    <span className={`security-severity severity-${issue.severity}`}>Alert</span>
+                    <span className={`security-severity severity-${issue.severity}`}>
+                      Alert
+                    </span>
                     <div>
                       <p className="security-issue-type">{issue.type}</p>
-                      <p className="security-issue-count">{issue.count} passwords affected</p>
+                      <p className="security-issue-count">
+                        {issue.count} passwords affected
+                      </p>
                     </div>
                   </div>
-                  <button className="security-fix-btn">Fix Now</button>
+                  <button className="security-fix-btn" onClick={onFixNow}>
+                    Fix Now
+                  </button>
                 </div>
               ))}
           </div>
@@ -258,7 +309,8 @@ export default function SecurityOverview({ expanded = false }: SecurityOverviewP
             <div className="settings-card">
               <h3 className="settings-section-title">No Issues Detected</h3>
               <p className="settings-section-subtitle">
-                Your current decrypted vault entries do not show weak, duplicate, or old passwords.
+                Your current decrypted vault entries do not show weak, duplicate, or old
+                passwords.
               </p>
             </div>
           ) : (
@@ -292,22 +344,25 @@ export default function SecurityOverview({ expanded = false }: SecurityOverviewP
       )}
 
       {!loading && !error && items.length > 0 && (
-        <div className="settings-layout">
-          {items.map((item) => (
-            <div className="settings-card" key={item.id}>
-              <h3 className="settings-section-title">{item.label}</h3>
-              <p className="settings-section-subtitle">
-                Rating: <strong>{item.rating}</strong>
-              </p>
-              <p className="settings-section-subtitle">
-                Score: <strong>{item.score}/100</strong>
-              </p>
-              <p className="settings-section-subtitle">
-                Length: <strong>{item.password.length}</strong>
-              </p>
-            </div>
-          ))}
-        </div>
+        <>
+          <h3 className="settings-section-title" style={{ marginBottom: "16px" }}>
+            Passwords
+          </h3>
+
+          <div className="settings-layout">
+            {items.map((item) => (
+              <div className="settings-card" key={item.id}>
+                <h3 className="settings-section-title">Website: {item.label}</h3>
+                <p className="settings-section-subtitle">
+                  Rating: <strong>{item.rating}</strong>
+                </p>
+                <p className="settings-section-subtitle">
+                  Score: <strong>{item.score}/100</strong>
+                </p>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
