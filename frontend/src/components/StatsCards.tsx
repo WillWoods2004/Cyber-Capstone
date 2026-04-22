@@ -5,7 +5,6 @@ import type { CipherBlob } from "../crypto/crypto";
 type Stats = {
   total: number;
   weak: number;
-  expiringSoon: number;
   securityScore: number;
 };
 
@@ -44,13 +43,6 @@ function isWeakPassword(password: string): boolean {
   return strengthCount < 3;
 }
 
-function isExpiringSoon(meta?: Record<string, unknown>): boolean {
-  if (!meta?.expiresAt) return false;
-  const expiry = new Date(meta.expiresAt as string).getTime();
-  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-  return expiry - Date.now() < thirtyDays && expiry > Date.now();
-}
-
 function calcSecurityScore(total: number, weak: number): number {
   if (total === 0) return 100;
   const strongRatio = (total - weak) / total;
@@ -73,13 +65,11 @@ export default function StatsCards({ currentUser, refreshTrigger }: StatsCardsPr
         const userItems = items.filter((item) => belongsToCurrentUser(item, currentUser));
 
         let weak = 0;
-        let expiringSoon = 0;
 
         for (const item of userItems) {
           try {
             const plaintext = await decryptItem(item);
             if (isWeakPassword(plaintext)) weak++;
-            if (isExpiringSoon(item.meta)) expiringSoon++;
           } catch {
             // skip items that fail to decrypt
           }
@@ -89,7 +79,6 @@ export default function StatsCards({ currentUser, refreshTrigger }: StatsCardsPr
         setStats({
           total,
           weak,
-          expiringSoon,
           securityScore: calcSecurityScore(total, weak),
         });
       } catch (err) {
@@ -114,12 +103,6 @@ export default function StatsCards({ currentUser, refreshTrigger }: StatsCardsPr
       value: loading ? "—" : String(stats?.weak ?? 0),
       icon: "⚠️",
       color: "stat-orange",
-    },
-    {
-      label: "Expiring Soon",
-      value: loading ? "—" : String(stats?.expiringSoon ?? 0),
-      icon: "⏰",
-      color: "stat-yellow",
     },
     {
       label: "Security Score",
