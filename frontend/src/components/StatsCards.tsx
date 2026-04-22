@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
 import {
-  belongsToCurrentUser,
   calcSecurityScore,
+  filterVaultItems,
   isWeakPassword,
 } from "../utils/security";
 
@@ -20,7 +20,7 @@ type StatsCardsProps = {
 
 
 export default function StatsCards({ currentUser, refreshTrigger }: StatsCardsProps) {
-  const { listItems, decryptItem, isReady } = useCrypto();
+  const { listItems, decryptItem, isReady, vaultMode } = useCrypto();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -32,7 +32,7 @@ export default function StatsCards({ currentUser, refreshTrigger }: StatsCardsPr
       try {
         const items: CipherBlob[] = await listItems();
 
-        const userItems = items.filter((item) => belongsToCurrentUser(item, currentUser));
+        const userItems = filterVaultItems(items, currentUser, vaultMode);
 
         let weak = 0;
         let decryptedCount = 0;

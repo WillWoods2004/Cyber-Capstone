@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
-import { belongsToCurrentUser } from "../utils/security";
+import { filterVaultItems } from "../utils/security";
 
 type PasswordEntry = {
   site: string;
@@ -43,7 +43,7 @@ function getSavedTimestamp(item: CipherBlob): string | undefined {
 
 
 export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
-  const { listItems, decryptItem, isReady } = useCrypto();
+  const { listItems, decryptItem, isReady, vaultMode } = useCrypto();
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -59,7 +59,7 @@ export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
       try {
         const items: CipherBlob[] = await listItems();
 
-        const userItems = items.filter((item) => belongsToCurrentUser(item, currentUser));
+        const userItems = filterVaultItems(items, currentUser, vaultMode);
 
         const sorted = [...userItems].sort((a, b) => {
           const aTime = getSavedTimestamp(a) ? new Date(getSavedTimestamp(a) as string).getTime() : 0;

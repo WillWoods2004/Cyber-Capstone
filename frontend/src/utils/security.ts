@@ -66,3 +66,17 @@ export function calcSecurityScore(total: number, weak: number): number {
   const strongRatio = (total - weak) / total;
   return Math.round(strongRatio * 100);
 }
+
+export type VaultMode = "legacy" | "tokenized" | null;
+
+export function filterVaultItems(
+  items: CipherBlob[],
+  currentUser: string,
+  vaultMode: VaultMode
+): CipherBlob[] {
+  if (vaultMode === "tokenized") {
+    return items;
+  }
+
+  return items.filter((item) => belongsToCurrentUser(item, currentUser));
+}

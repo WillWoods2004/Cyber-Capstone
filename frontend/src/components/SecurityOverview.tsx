@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
 import {
-  belongsToCurrentUser,
   calcSecurityScore,
+  filterVaultItems,
   isWeakPassword,
   scorePassword,
 } from "../utils/security";
@@ -59,7 +59,7 @@ export default function SecurityOverview({
   refreshTrigger = 0,
   onFixNow,
 }: SecurityOverviewProps) {
-  const { listItems, decryptItem, isReady } = useCrypto();
+  const { listItems, decryptItem, isReady, vaultMode } = useCrypto();
   const [issues, setIssues] = useState<SecurityIssue[]>([]);
   const [items, setItems] = useState<ScoredPassword[]>([]);
   const [score, setScore] = useState<number>(100);
@@ -86,9 +86,7 @@ export default function SecurityOverview({
 
       try {
         const vaultItems: CipherBlob[] = await listItems();
-        const userItems = vaultItems.filter((item) =>
-          belongsToCurrentUser(item, currentUser)
-        );
+        const userItems = filterVaultItems(vaultItems, currentUser, vaultMode);
 
         const plaintexts: string[] = [];
         const scored: ScoredPassword[] = [];
