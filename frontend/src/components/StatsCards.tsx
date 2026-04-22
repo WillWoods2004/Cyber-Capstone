@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
+import {
+  belongsToCurrentUser,
+  calcSecurityScore,
+  isWeakPassword,
+} from "../utils/security";
 
 type Stats = {
   total: number;
@@ -13,41 +18,6 @@ type StatsCardsProps = {
   refreshTrigger?: number;
 };
 
-function belongsToCurrentUser(item: CipherBlob, currentUser: string): boolean {
-  const metaUserId = (item.meta?.userId as string | undefined) ?? "";
-  const metaUsername = (item.meta?.username as string | undefined) ?? "";
-  const metaLogin = (item.meta?.login as string | undefined) ?? "";
-
-  if (!currentUser.trim()) {
-    return true;
-  }
-
-  if (!metaUserId && !metaUsername && !metaLogin) {
-    return true;
-  }
-
-  return (
-    metaUserId === currentUser ||
-    metaUsername === currentUser ||
-    metaLogin === currentUser
-  );
-}
-
-function isWeakPassword(password: string): boolean {
-  if (password.length < 8) return true;
-  const hasUpper = /[A-Z]/.test(password);
-  const hasLower = /[a-z]/.test(password);
-  const hasNumber = /[0-9]/.test(password);
-  const hasSpecial = /[^A-Za-z0-9]/.test(password);
-  const strengthCount = [hasUpper, hasLower, hasNumber, hasSpecial].filter(Boolean).length;
-  return strengthCount < 3;
-}
-
-function calcSecurityScore(total: number, weak: number): number {
-  if (total === 0) return 100;
-  const strongRatio = (total - weak) / total;
-  return Math.round(strongRatio * 100);
-}
 
 export default function StatsCards({ currentUser, refreshTrigger }: StatsCardsProps) {
   const { listItems, decryptItem, isReady } = useCrypto();
@@ -65,17 +35,19 @@ export default function StatsCards({ currentUser, refreshTrigger }: StatsCardsPr
         const userItems = items.filter((item) => belongsToCurrentUser(item, currentUser));
 
         let weak = 0;
+        let decryptedCount = 0;
 
         for (const item of userItems) {
           try {
             const plaintext = await decryptItem(item);
+            decryptedCount++;
             if (isWeakPassword(plaintext)) weak++;
           } catch {
             // skip items that fail to decrypt
           }
         }
 
-        const total = userItems.length;
+        const total = decryptedCount;
         setStats({
           total,
           weak,

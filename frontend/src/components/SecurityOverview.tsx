@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
+import {
+  belongsToCurrentUser,
+  calcSecurityScore,
+  isWeakPassword,
+  scorePassword,
+} from "../utils/security";
 
 type SecurityOverviewProps = {
   expanded?: boolean;
@@ -23,36 +29,6 @@ type ScoredPassword = {
   rating: "Strong" | "Moderate" | "Weak";
 };
 
-function belongsToCurrentUser(item: CipherBlob, currentUser: string): boolean {
-  const metaUserId = (item.meta?.userId as string | undefined) ?? "";
-  const metaUsername = (item.meta?.username as string | undefined) ?? "";
-  const metaLogin = (item.meta?.login as string | undefined) ?? "";
-
-  if (!currentUser.trim()) {
-    return true;
-  }
-
-  if (!metaUserId && !metaUsername && !metaLogin) {
-    return true;
-  }
-
-  return (
-    metaUserId === currentUser ||
-    metaUsername === currentUser ||
-    metaLogin === currentUser
-  );
-}
-
-function isWeak(password: string): boolean {
-  if (password.length < 8) return true;
-
-  const hasUpper = /[A-Z]/.test(password);
-  const hasLower = /[a-z]/.test(password);
-  const hasNumber = /[0-9]/.test(password);
-  const hasSpecial = /[^A-Za-z0-9]/.test(password);
-
-  return [hasUpper, hasLower, hasNumber, hasSpecial].filter(Boolean).length < 3;
-}
 
 function isOld(meta?: Record<string, unknown>): boolean {
   const savedAt =
@@ -65,26 +41,6 @@ function isOld(meta?: Record<string, unknown>): boolean {
   return Date.now() - saved > ninetyDays;
 }
 
-function scorePassword(password: string) {
-  let score = 0;
-
-  if (password.length >= 8) score += 20;
-  if (password.length >= 12) score += 20;
-  if (/[a-z]/.test(password)) score += 15;
-  if (/[A-Z]/.test(password)) score += 15;
-  if (/[0-9]/.test(password)) score += 15;
-  if (/[^A-Za-z0-9]/.test(password)) score += 15;
-
-  if (score >= 85) return { score, rating: "Strong" as const };
-  if (score >= 60) return { score, rating: "Moderate" as const };
-  return { score, rating: "Weak" as const };
-}
-
-function calcSecurityScore(total: number, weak: number): number {
-  if (total === 0) return 100;
-  const strongRatio = (total - weak) / total;
-  return Math.round(strongRatio * 100);
-}
 
 function labelForItem(item: CipherBlob): string {
   const meta = item.meta as Record<string, unknown> | undefined;
@@ -145,7 +101,7 @@ export default function SecurityOverview({
             const plaintext = await decryptItem(item);
             plaintexts.push(plaintext);
 
-            if (isWeak(plaintext)) weakCount++;
+            if (isWeakPassword(plaintext)) weakCount++;
             if (isOld(item.meta)) oldCount++;
 
             const result = scorePassword(plaintext);

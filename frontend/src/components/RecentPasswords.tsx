@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useCrypto } from "../crypto/CryptoProvider";
 import type { CipherBlob } from "../crypto/crypto";
+import { belongsToCurrentUser } from "../utils/security";
 
 type PasswordEntry = {
   site: string;
@@ -40,25 +41,6 @@ function getSavedTimestamp(item: CipherBlob): string | undefined {
   return (item.meta?.savedAt as string | undefined) || (item.meta?.createdAt as string | undefined);
 }
 
-function belongsToCurrentUser(item: CipherBlob, currentUser: string): boolean {
-  const metaUserId = (item.meta?.userId as string | undefined) ?? "";
-  const metaUsername = (item.meta?.username as string | undefined) ?? "";
-  const metaLogin = (item.meta?.login as string | undefined) ?? "";
-
-  if (!currentUser.trim()) {
-    return true;
-  }
-
-  if (!metaUserId && !metaUsername && !metaLogin) {
-    return true;
-  }
-
-  return (
-    metaUserId === currentUser ||
-    metaUsername === currentUser ||
-    metaLogin === currentUser
-  );
-}
 
 export default function RecentPasswords({ currentUser }: RecentPasswordsProps) {
   const { listItems, decryptItem, isReady } = useCrypto();
