@@ -82,7 +82,11 @@ export default function Dashboard({
                   <ActivityFeed />
                 </div>
                 <div className="grid-col-2">
-                  <SecurityOverview />
+                  <SecurityOverview
+                    currentUser={username}
+                    refreshTrigger={refreshStats}
+                    onFixNow={() => setActiveView("clientVault")}
+                  />
                 </div>
                 <div className="grid-col-1">
                   <QuickActions
@@ -117,7 +121,11 @@ export default function Dashboard({
 
           {activeView === "security" && (
             <div className="security-page">
-              <SecurityOverview expanded={true} />
+              <SecurityOverview
+                expanded={true}
+                currentUser={username}
+                refreshTrigger={refreshStats}
+              />
             </div>
           )}
 
