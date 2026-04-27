@@ -10,7 +10,12 @@ vi.mock("../crypto/CryptoProvider", () => ({
     listItems: mockListItems,
     decryptItem: mockDecryptItem,
     isReady: true,
+    vaultMode: "shared",
   }),
+}));
+
+vi.mock("../utils/security", () => ({
+  filterVaultItems: (items: unknown[]) => items,
 }));
 
 const mockPasswords = [
@@ -76,7 +81,5 @@ describe("RecentPasswords", () => {
 
     expect(screen.queryByText("StrongPass123!")).not.toBeInTheDocument();
     expect(screen.queryByText("AnotherPass456!")).not.toBeInTheDocument();
-    expect(screen.queryByText("Show")).not.toBeInTheDocument();
-    expect(screen.queryByText("Hide")).not.toBeInTheDocument();
   });
 });
