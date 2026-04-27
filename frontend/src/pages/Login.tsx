@@ -142,7 +142,13 @@ export default function Login({
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               autoComplete="username"
+              onKeyDown={handleCapsCheck}
+              onKeyUp={handleCapsCheck}
             />
+
+            {capsOn && !limitReached && (
+              <p className="caps-warning">Caps Lock is Turned On</p>
+            )}
           </div>
 
           <div className="form-field">
