@@ -11,8 +11,8 @@ type SessionTimeoutProps = {
 
 export default function SessionTimeout({
   enabled,
-  timeoutMs = 500_000,
-  warningMs = 470_000,
+  timeoutMs = 180_000,
+  warningMs = 150_000,
   onWarning,
   onActive,
   onTimeout,
